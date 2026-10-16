@@ -36,6 +36,12 @@ namespace SurfaceNetworkFilter
 
         private bool TrySubtractLaneContours(SurfacePatch source, List<LaneMaskCell> cells, out SurfacePatch result)
         {
+            return TryClipSurfaceFootprint(source, cells, out result) ||
+                TrySubtractLaneContoursLegacy(source, cells, out result);
+        }
+
+        private bool TrySubtractLaneContoursLegacy(SurfacePatch source, List<LaneMaskCell> cells, out SurfacePatch result)
+        {
             result = null;
             if (source.Parts.Count > 0 || source.Triangles.Count == 0) return false;
             List<float3> outline = new List<float3>();

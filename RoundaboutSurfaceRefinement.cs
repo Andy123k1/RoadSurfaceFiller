@@ -133,7 +133,8 @@ namespace SurfaceNetworkFilter
             // One mesh-union / difference pass removes internal ribbon edges
             // before clipping. Folded approach meshes are valid union inputs.
             SurfacePatch sweepInput = patch.Parts.Count > 0 ? FlattenSurfacePatchMesh(patch) : patch;
-            patch = TrySweepLaneMasks(sweepInput, masks, out SurfacePatch compact) ? compact : SubtractLaneMasks(patch, masks);
+            patch = TrySubtractLaneContours(sweepInput, masks, out SurfacePatch compact) ||
+                TrySweepLaneMasks(sweepInput, masks, out compact) ? compact : SubtractLaneMasks(patch, masks);
             MarkLaneMasksApplied(patch);
             MarkPlantedMasksApplied(patch);
             if (m_LoggedRoundaboutWalkClips++ < 16)

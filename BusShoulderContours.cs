@@ -24,6 +24,7 @@ namespace SurfaceNetworkFilter
 
         private bool TryIntersectBusContours(SurfacePatch source, List<LaneMaskCell> cells, out SurfacePatch result)
         {
+            if (TryClipSurfaceFootprint(source, cells, out result, intersection: true)) return true;
             result = null;
             if (source.Triangles.Count == 0 || source.Nodes.Count == 0 || source.Triangles.Count > 512 || cells.Count > 4096) return false;
             float3 origin = source.Nodes[0].m_Position;

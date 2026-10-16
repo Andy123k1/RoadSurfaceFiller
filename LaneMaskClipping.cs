@@ -106,6 +106,11 @@ namespace SurfaceNetworkFilter
         {
             float3 low = new float3(float.PositiveInfinity), high = new float3(float.NegativeInfinity);
             foreach (float3 point in polygon) { low = math.min(low, point); high = math.max(high, point); }
+            return LaneCellOverlaps(low, high, cell);
+        }
+
+        private static bool LaneCellOverlaps(float3 low, float3 high, LaneMaskCell cell)
+        {
             // Do not cut an elevated sidewalk/bridge with a lane on a lower deck.
             return low.x < cell.Maximum.x + 0.0001f && high.x > cell.Minimum.x - 0.0001f &&
                 low.z < cell.Maximum.z + 0.0001f && high.z > cell.Minimum.z - 0.0001f &&
@@ -266,6 +271,17 @@ namespace SurfaceNetworkFilter
 
         private SurfacePatch LaneMaskFragmentFallback(SurfacePatch source, List<List<float3>> fragments)
         {
+            // Recover the union in one operation before attempting the legacy
+            // pairwise shared-edge join (which is sensitive to T junctions).
+            SurfacePatch fragmentMesh = CopySurfacePatchProperties(source);
+            bool valid = true;
+            foreach (List<float3> fragment in fragments)
+            {
+                SurfacePatch part = TriangulateBoundary(fragment);
+                if (part.Triangles.Count == 0 && LanePolygonArea(fragment) > 0.00005d) { valid = false; break; }
+                fragmentMesh.Parts.Add(part);
+            }
+            if (valid && TryClipSurfaceFootprint(fragmentMesh, new List<LaneMaskCell>(), out SurfacePatch compact)) return compact;
             // A native area cannot contain a hole. Join adjacent fragments into
             // simple contours instead of exporting every clipped triangle as a
             // separate decal. A join that would close a hole stays split.

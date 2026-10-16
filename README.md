@@ -4,6 +4,16 @@ Road Surface Filler creates native surface areas over road pavement and road-ass
 
 Open **RoadSurfaceFiller.sln** to work with the existing project in Visual Studio. The official template's publishing profiles and a draft mod-page configuration are included; see [PUBLISHING.md](PUBLISHING.md).
 
+## Junction surface compaction: 0.5.25
+
+- Junction clipping now combines the source mesh into polygon footprints using bundled Clipper2 integer boolean operations. Internal triangle edges are removed before native areas are created, including roundabout pavement and bus shoulder intersections.
+- Protected bike/bus lanes, walking areas, planting, crosswalk ownership and roundabout islands keep their existing masks. Regions containing holes are cut into simple contours because a native area cannot represent a hole. Complex contours are divided locally rather than exported as hundreds of clipped triangles.
+- Lane and planting masks are applied together, once per queued footprint. Output parts bypass repeated clipping. Saved surface entity reuse indexes unchanged geometry and reads candidate centers once per road.
+- Existing city/segment assignments, preset update choices, junction selections and projection limits retain their existing formats. Use **Rebuild applied surfaces** after installing this version to replace older fragmented overlays while retaining saved finishes. **Refresh surfaces** only refreshes the surface catalog.
+- Generation logs include compact footprint counts and geometry recovery counts alongside managed area counts and elapsed generation times. Unrepresentable geometry retains the previous recovery path; no area-count cap drops road coverage.
+- Build and packaging checks are recorded with the staged release. Real-city performance and visual results require an in-game check; no specific surface reduction or frame-time improvement has been measured yet.
+- Clipper2 1.5.4 source and license are in [ThirdParty/Clipper2](ThirdParty/Clipper2/README.md), compiled into the mod without an additional runtime dependency.
+
 ## UI module registration hotfix: 0.5.24
 
 - Added the UI module's empty `Dependencies:` declaration. The game's asset loader requires this metadata line even when a module has no UI dependencies; omitting it caused `UIModuleAsset.PostCreate` to pass null to `AssetData.AddTags` while registering the published UI file.

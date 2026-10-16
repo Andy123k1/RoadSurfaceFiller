@@ -930,17 +930,26 @@ namespace SurfaceNetworkFilter
 
         private void QueuePolygon(Entity owner, Entity prefab, SurfacePatch polygon)
         {
-            if (!polygon.DedicatedLanesClipped && m_ActiveJunctionLaneProfile != null && m_ActiveJunctionLaneProfile.Cells.Count > 0)
-                polygon = SubtractLaneMasks(polygon, m_ActiveJunctionLaneProfile.Cells);
-            else if (m_ActiveJunctionLaneProfile != null && m_ActiveJunctionLaneProfile.ContinuousCells.Count > 0)
+            List<LaneMaskCell> masks = new List<LaneMaskCell>();
+            if (m_ActiveJunctionLaneProfile != null)
+            {
                 // Crosswalk ownership can bypass broad shoulder-fill masks.
                 // Dedicated bike and bus paths still stay visible through it.
-                polygon = SubtractLaneMasks(polygon, m_ActiveJunctionLaneProfile.ContinuousCells);
-            if (!polygon.PlantedAreasClipped && m_ActiveJunctionPlantMasks != null && m_ActiveJunctionPlantMasks.Count > 0)
-            {
-                polygon = SubtractLaneMasks(polygon, m_ActiveJunctionPlantMasks);
-                MarkPlantedMasksApplied(polygon);
+                masks.AddRange(!polygon.DedicatedLanesClipped ? m_ActiveJunctionLaneProfile.Cells :
+                    m_ActiveJunctionLaneProfile.ContinuousCells);
             }
+            bool clipPlants = !polygon.PlantedAreasClipped && m_ActiveJunctionPlantMasks != null && m_ActiveJunctionPlantMasks.Count > 0;
+            if (clipPlants) masks.AddRange(m_ActiveJunctionPlantMasks);
+            if (masks.Count > 0) polygon = SubtractLaneMasks(polygon, masks);
+            if (clipPlants) MarkPlantedMasksApplied(polygon);
+            QueueClippedPolygon(owner, prefab, polygon);
+        }
+
+        private void QueueClippedPolygon(Entity owner, Entity prefab, SurfacePatch polygon)
+        {
+            // Masks have already been applied to the complete footprint. Do not
+            // clip each output part again: this used to multiply tiny fragments
+            // and repeated the same expensive lane boolean at every recursion.
             // Keep neighbouring masks on their authored boundary. The private
             // renderer uses only the native minimum expansion, so inverse
             // compensation no longer needs to contract metre-scale rims.
@@ -952,7 +961,7 @@ namespace SurfaceNetworkFilter
                     part.ProjectionMinimum = polygon.ProjectionMinimum;
                     part.ProjectionMaximum = polygon.ProjectionMaximum;
                     part.ExactBoundary = polygon.ExactBoundary;
-                    QueuePolygon(owner, prefab, part);
+                    QueueClippedPolygon(owner, prefab, part);
                 }
                 return;
             }

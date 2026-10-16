@@ -21,6 +21,12 @@ namespace SurfaceNetworkFilter
 
         private struct SurfacePatchStamp { internal ulong Geometry, Topology; }
 
+        private sealed class ReusableSurfaceArea
+        {
+            internal Entity Area;
+            internal float3 Center;
+        }
+
         private Entity m_PlanningSurfaceOwner;
         private readonly List<PlannedSurfaceArea> m_PlannedSurfaceAreas = new List<PlannedSurfaceArea>();
         private readonly Dictionary<Entity, SurfacePatchStamp> m_CommittedSurfacePatches = new Dictionary<Entity, SurfacePatchStamp>();
@@ -35,6 +41,7 @@ namespace SurfaceNetworkFilter
         {
             EndSurfacePlan(); m_CommittedSurfacePatches.Clear(); m_ProjectionExpansion.Clear();
             m_InitialMeshPreparation = true; m_GenerationCacheEpoch = 0; m_GenerationCachesDirty = true;
+            m_LoggedCompactFootprints = m_LoggedCompactFootprintFailures = 0;
             ResetSurfaceGenerationCosts();
         }
 
@@ -143,23 +150,46 @@ namespace SurfaceNetworkFilter
             List<Entity> previous = m_GeneratedByOwner.TryGetValue(owner, out List<Entity> owned)
                 ? new List<Entity>(owned) : new List<Entity>();
             HashSet<Entity> used = new HashSet<Entity>();
+            Dictionary<Entity, Dictionary<ulong, List<Entity>>> exact = new Dictionary<Entity, Dictionary<ulong, List<Entity>>>();
+            Dictionary<Entity, List<ReusableSurfaceArea>> reusable = new Dictionary<Entity, List<ReusableSurfaceArea>>();
+            foreach (Entity area in previous)
+            {
+                if (!EntityManager.Exists(area) || !EntityManager.HasComponent<PrefabRef>(area)) continue;
+                Entity prefab = EntityManager.GetComponentData<PrefabRef>(area).m_Prefab;
+                if (!CanReuseSurfaceArea(area, owner, prefab)) continue;
+                if (!reusable.TryGetValue(prefab, out List<ReusableSurfaceArea> candidates))
+                    reusable.Add(prefab, candidates = new List<ReusableSurfaceArea>());
+                if (TryGetAreaCenter(area, out float3 center)) candidates.Add(new ReusableSurfaceArea { Area = area, Center = center });
+                if (!m_CommittedSurfacePatches.TryGetValue(area, out SurfacePatchStamp stamp)) continue;
+                if (!exact.TryGetValue(prefab, out Dictionary<ulong, List<Entity>> geometries))
+                    exact.Add(prefab, geometries = new Dictionary<ulong, List<Entity>>());
+                if (!geometries.TryGetValue(stamp.Geometry, out List<Entity> matches))
+                    geometries.Add(stamp.Geometry, matches = new List<Entity>());
+                matches.Add(area);
+            }
             // Reserve unchanged patches first so a changed corner cannot consume
             // the render entity of an unchanged road body or sidewalk.
             foreach (PlannedSurfaceArea plan in m_PlannedSurfaceAreas)
-                foreach (Entity area in previous)
-                    if (!used.Contains(area) && CanReuseSurfaceArea(area, owner, plan.Prefab) && SurfaceAreaMatchesPlan(area, plan))
-                    { plan.ReusedArea = area; used.Add(area); m_ReusedSurfaceAreas++; break; }
+                if (exact.TryGetValue(plan.Prefab, out Dictionary<ulong, List<Entity>> geometries) &&
+                    geometries.TryGetValue(plan.Stamp.Geometry, out List<Entity> matches))
+                    foreach (Entity area in matches)
+                        if (!used.Contains(area) && SurfaceAreaMatchesPlan(area, plan))
+                        { plan.ReusedArea = area; used.Add(area); m_ReusedSurfaceAreas++; break; }
 
             foreach (PlannedSurfaceArea plan in m_PlannedSurfaceAreas)
             {
                 if (plan.ReusedArea != Entity.Null) continue;
                 Entity best = Entity.Null; float distance = float.PositiveInfinity;
                 float3 center = Average(plan.Patch.Nodes);
-                foreach (Entity area in previous)
+                if (reusable.TryGetValue(plan.Prefab, out List<ReusableSurfaceArea> candidates))
                 {
-                    if (used.Contains(area) || !CanReuseSurfaceArea(area, owner, plan.Prefab) || !TryGetAreaCenter(area, out float3 oldCenter)) continue;
-                    float candidate = math.distancesq(center, oldCenter);
-                    if (candidate < distance) { best = area; distance = candidate; }
+                    for (int i = 0; i < candidates.Count; i++)
+                    {
+                        ReusableSurfaceArea candidate = candidates[i];
+                        if (used.Contains(candidate.Area)) continue;
+                        float candidateDistance = math.distancesq(center, candidate.Center);
+                        if (candidateDistance < distance) { best = candidate.Area; distance = candidateDistance; }
+                    }
                 }
                 if (best != Entity.Null)
                 {
@@ -286,7 +316,9 @@ namespace SurfaceNetworkFilter
             Mod.Log.Info("Surface refresh completed. Managed areas: " + m_GeneratedCount +
                 "; roads=" + m_PerformanceRoads + "; generation elapsed=" + m_GenerationMilliseconds.ToString("F1") +
                 " ms; longest road=" + m_LongestRoadMilliseconds.ToString("F1") + " ms; unchanged areas=" + m_ReusedSurfaceAreas +
-                "; updated in place=" + m_UpdatedSurfaceAreas + "; new definitions=" + m_NewSurfaceAreas + ".");
+                "; updated in place=" + m_UpdatedSurfaceAreas + "; new definitions=" + m_NewSurfaceAreas +
+                "; compact footprint passes=" + m_CompactFootprintPasses + "; footprint regions=" + m_CompactFootprintRegions +
+                "; geometry recoveries=" + m_CompactFootprintFallbacks + ".");
             ResetSurfaceGenerationCosts();
         }
 
@@ -294,6 +326,7 @@ namespace SurfaceNetworkFilter
         {
             m_PerformanceRoads = m_ReusedSurfaceAreas = m_UpdatedSurfaceAreas = m_NewSurfaceAreas = 0;
             m_GenerationMilliseconds = m_LongestRoadMilliseconds = 0;
+            m_CompactFootprintPasses = m_CompactFootprintRegions = m_CompactFootprintFallbacks = 0;
         }
     }
 }

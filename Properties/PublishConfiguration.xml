@@ -46,12 +46,12 @@ Surface appearance depends on the road geometry and the selected surface assets.
   <Screenshot Value="Properties/Screenshots/05-road-junction-surfaces.jpg" />
   <Tag Value="Code Mod" />
   <!-- Add a discussion link with ForumLink Value="https://...". -->
-  <ModVersion Value="0.5.24" />
+  <ModVersion Value="0.5.25" />
   <!-- Current locally installed game version; review for each release. -->
   <GameVersion Value="1.6.2f1" />
   <!-- Add Dependency Id="..." only for a required mod. -->
   <!-- Add RequiredDLC Value="..." only when a DLC is required. -->
-  <ChangeLog Value="Fix UI module registration on PDX Mods by declaring the UI module's empty dependency list." />
+  <ChangeLog Value="Reduce junction surface fragmentation by clipping combined footprints before creating native areas. Preserve protected lanes, sidewalks, planting and roundabout islands; avoid repeated clipping of output pieces and speed up reuse of existing surface entities. Rebuild applied surfaces once to replace older fragmented areas while retaining saved finishes." />
   <ExternalLink Type="github" Url="https://github.com/Andy123k1/RoadSurfaceFiller" />
   <AccessLevel Value="Public" />
 </Publish>
