@@ -52,6 +52,5 @@ Surface appearance depends on the road geometry and the selected surface assets.
   <!-- Add RequiredDLC Value="..." only when a DLC is required. -->
   <ChangeLog Value="Initial release of Road Surface Filler." />
   <ExternalLink Type="github" Url="https://github.com/Andy123k1/RoadSurfaceFiller" />
-  <!-- Start with a private listing for review; change to Public when ready. -->
-  <AccessLevel Value="Private" />
+  <AccessLevel Value="Public" />
 </Publish>
