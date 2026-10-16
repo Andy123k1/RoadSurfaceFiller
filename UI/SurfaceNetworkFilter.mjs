@@ -2,7 +2,7 @@
  * Cities: Skylines II UI Module
  * Id: SurfaceNetworkFilter
  * Author: Road Surface Filler
- * Version: 0.5.22
+ * Version: 0.5.23
  */
 
 // The game's shared React instance and documented modding hook are used
@@ -328,6 +328,10 @@ function RuleEditor({ draft, setDraft, surfaces, roads = [], onSave, onCancel, s
                 h("input", { id: "snf-rule-name", className: "snf-input", type: "text", maxLength: 120,
                     value: draft.name, placeholder: local ? "For example, bus street with paved shoulders" : "For example, cobblestone alleys", disabled: saving,
                     onChange: event => change("name", event.target.value) })),
+            local && h("div", { className: "snf-rule-lane-options" },
+                h(Toggle, { label: "Update placed roads when this preset is saved", checked: !!draft.updateExistingSegments, disabled: saving,
+                    onChange: value => change("updateExistingSegments", value) }),
+                h("div", { className: "snf-field-hint" }, "On: saving changes updates roads using this preset. Off: placed roads keep their current finish until you reapply it with Replace. Independent shoulder-tool customizations stay separate.")),
             !local && h(Field, { label: "Road category", id: "snf-rule-category" },
                 h(Picker, { id: "snf-rule-category", value: draft.category, items: categories, disabled: saving,
                     onChange: value => setDraft(current => ({ ...current, category: value, roadPrefab: "" })) })),
@@ -373,7 +377,8 @@ function RuleEditor({ draft, setDraft, surfaces, roads = [], onSave, onCancel, s
             }),
             !local && h(Toggle, { label: "Enable this rule", checked: draft.enabled, disabled: saving,
                 onChange: value => change("enabled", value) }),
-            h("div", { className: "snf-note" }, local ? "General rules are optional. Unchecked targets keep existing finishes on upgrades and original finishes on new vanilla roads. Choose this preset in the road tool when drawing or using Replace. Saving or editing does not change roads." :
+            h("div", { className: "snf-note" }, local ? "General rules are optional. Unchecked targets inherit existing city finishes or keep vanilla finishes. Choose this preset in the road tool when drawing or using Replace. " +
+                (draft.updateExistingSegments ? "Saving also updates roads linked to this preset." : "Saving keeps placed roads as they are.") :
                 "Exact road types take priority over categories, then all roads. Lane settings use the most specific matching rules; when those rules overlap, any enabled separation switch keeps that lane separate."))),
         h("div", { className: "snf-editor-actions" },
             h("button", { type: "button", className: "snf-action", disabled: saving, onClick: onCancel }, "Cancel"),
@@ -456,7 +461,8 @@ function RuleCards({ rules, local, onEdit, saving, onCopyToSegments }) {
         const detailsId = "snf-rule-details-" + rule.id;
         const summary = [local ? "Selected segments" : rule.roadPrefab || labelOf(categories, rule.category),
             (rule.assignments || []).length ? rule.assignments.map(item => labelOf(targets, item.target)).join(", ") : "Lane settings only",
-            rule.fillBusShoulders ? "Bus-lane shoulders" : ""].filter(Boolean).join(" · ");
+            rule.fillBusShoulders ? "Bus-lane shoulders" : "",
+            local ? rule.updateExistingSegments ? "Updates placed roads" : "Keeps placed finishes" : ""].filter(Boolean).join(" · ");
         return h("section", { key: rule.id, className: "snf-rule" + (!rule.enabled ? " snf-rule-disabled" : "") + (open ? "" : " snf-rule-collapsed") },
             h("div", { className: "snf-rule-top" },
                 h("button", { type: "button", className: "snf-rule-name", "aria-expanded": open, "aria-controls": detailsId,
@@ -478,6 +484,7 @@ function RuleCards({ rules, local, onEdit, saving, onCopyToSegments }) {
                 rule.separateBikeLanes && h("span", null, "Separate bike lanes"),
                 rule.separateBusLanes && h("span", null, "Separate bus lanes"),
                 rule.fillBusShoulders && h("span", null, "Bus-lane shoulders"),
+                local && h("span", null, rule.updateExistingSegments ? "Updates placed roads" : "Keeps placed finishes"),
                 local && h("span", null, "Use in road tool"))),
             !rule.available && h("div", { className: "snf-warning" }, "Surface unavailable"),
             h("div", { className: "snf-rule-actions" },
@@ -519,7 +526,7 @@ function RuleManager({ state, onClose }) {
     const changeTab = value => { setTab(value); setDraft(null); setQuery(""); };
     const createSegmentRule = () => {
         setTab("segments"); setQuery("");
-        setDraft({ ...emptyDraft(), separateBikeLanes: null, separateBusLanes: null, fillBusShoulders: false });
+        setDraft({ ...emptyDraft(), separateBikeLanes: null, separateBusLanes: null, fillBusShoulders: false, updateExistingSegments: false });
     };
     const add = () => {
         if (local) { createSegmentRule(); return; }
@@ -528,7 +535,8 @@ function RuleManager({ state, onClose }) {
     };
     const save = () => {
         pending.current = state.saveResponse || 0; setSaving(true);
-        send(local ? "saveSegmentPreset" : "saveRule", JSON.stringify(local ? { rule: draft, fillBusShoulders: !!draft.fillBusShoulders } : draft));
+        send(local ? "saveSegmentPreset" : "saveRule", JSON.stringify(local ? { rule: draft, fillBusShoulders: !!draft.fillBusShoulders,
+            updateExistingSegments: !!draft.updateExistingSegments } : draft));
     };
     const filtered = rules.filter(rule => [rule.name, rule.roadPrefab || "", ...(rule.assignments || []).map(item => item.surface)]
         .join(" ").toLowerCase().includes(query.toLowerCase().trim()));
@@ -558,7 +566,7 @@ function RuleManager({ state, onClose }) {
                         local, saving, onSave: save, onCancel: () => setDraft(null) }) :
                     h("div", { className: "snf-list-column" },
                         h("div", { className: "snf-section-note" }, local ?
-                            "Choose a preset in the road tool to draw roads, or use Replace to apply it to existing segments." :
+                            "Choose a preset when drawing or using Replace. Each preset can update placed roads when saved, or keep their applied finishes." :
                             "Save rules here, then choose Apply city rules to update existing roads. Editing this list does not repaint the city. Segment overrides take priority."),
                         rules.length > 0 && h("input", { className: "snf-input snf-rule-search", value: query, type: "text",
                             placeholder: "Search rules…", "aria-label": "Search surface rules", onChange: event => setQuery(event.target.value) }),

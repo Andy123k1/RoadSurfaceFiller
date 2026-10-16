@@ -257,6 +257,7 @@ namespace SurfaceNetworkFilter
                 segment = SegmentRuleState(),
                 segmentPresets = setting.GetSegmentPresets().Select(item => new {
                     id = item.Rule.Id, name = item.Rule.Name, enabled = true, fillBusShoulders = item.FillBusShoulders,
+                    updateExistingSegments = item.UpdateExistingSegments,
                     separateBikeLanes = item.Rule.SeparateBikeLanes, separateBusLanes = item.Rule.SeparateBusLanes,
                     assignments = item.Rule.Assignments.Select(target => new { target = (int)target.Target, surface = target.Surface }).ToArray(),
                     available = item.Rule.Assignments.All(target => target.Surface.Length == 0 || RuntimeState.TryGetSurface(target.Surface, out _))

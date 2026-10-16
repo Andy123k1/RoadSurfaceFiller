@@ -15,7 +15,7 @@ Edit **Properties/PublishConfiguration.xml**. It includes:
 - Display name **Road Surface Filler** and a draft description of the current features.
 - The supplied RSF image at **Properties/Thumbnail.png**.
 - Four supplied screenshots under **Properties/Screenshots**, in the order selected for the mod page.
-- Mod version **0.5.22** and installed game version **1.6.2f1**.
+- Mod version **0.5.23** and installed game version **1.6.2f1**.
 - **Private** visibility for an initial listing review.
 - An empty ModId for a first publication.
 
@@ -44,6 +44,6 @@ From this folder:
 dotnet build RoadSurfaceFiller.sln -c Release --no-restore -p:SurfaceNetworkFilterStageOnly=true
 ```
 
-This uses the official post-processor and writes the runtime files to `artifacts/v0.5.22`. Normal builds deploy to the local game mod folder, so close the game before using normal deployment.
+This uses the official post-processor and writes the runtime files to `artifacts/v0.5.23`. Normal builds deploy to the local game mod folder, so close the game before using normal deployment.
 
 Official overview: https://www.paradoxinteractive.com/games/cities-skylines-ii/modding/dev-diary-3-code-modding

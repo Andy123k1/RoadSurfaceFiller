@@ -32,6 +32,7 @@ namespace SurfaceNetworkFilter
             internal bool City, Selected, Excluded, HasLocal;
             internal SavedSegmentSurfaceRule Local;
             internal List<SavedSegmentSurfaceTarget> Targets;
+            internal string PresetId;
         }
 
         private void ResetRoadStyleTransfers()
@@ -195,6 +196,7 @@ namespace SurfaceNetworkFilter
                 if (!commit.City && !commit.Selected && !commit.Excluded && !hasLocal) continue;
                 if (hasLocal)
                 {
+                    commit.PresetId = CaptureSegmentPresetId(record);
                     commit.Targets = new List<SavedSegmentSurfaceTarget>();
                     foreach (SavedSegmentSurfaceTarget item in EntityManager.GetBuffer<SavedSegmentSurfaceTarget>(record, true)) commit.Targets.Add(item);
                 }
@@ -244,6 +246,8 @@ namespace SurfaceNetworkFilter
             EntityManager.SetComponentData(record, EntityManager.GetComponentData<PrefabRef>(edge));
             DynamicBuffer<SavedSegmentSurfaceTarget> buffer = EntityManager.AddBuffer<SavedSegmentSurfaceTarget>(record);
             foreach (SavedSegmentSurfaceTarget item in commit.Targets) buffer.Add(item);
+            SetSegmentPresetLink(record, commit.PresetId);
+            QueueSegmentPresetRefresh(record);
             m_SegmentRuleRecords[edge] = record;
         }
 
@@ -261,7 +265,7 @@ namespace SurfaceNetworkFilter
             foreach (RoadStyleCommit commit in m_RoadStyleCommits.Values)
                 if (commit.Target == edge)
                 {
-                    commit.City = false; commit.HasLocal = false; commit.Targets = null;
+                    commit.City = false; commit.HasLocal = false; commit.Targets = null; commit.PresetId = null;
                 }
         }
 

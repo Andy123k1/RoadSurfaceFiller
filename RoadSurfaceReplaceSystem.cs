@@ -121,7 +121,7 @@ namespace SurfaceNetworkFilter
                             RestoreRoadToVanilla(target);
                         }
                         else SaveSegmentRule(target, new SegmentRuleDraft { Rule = request.Preset.Rule,
-                            FillBusShoulders = request.Preset.FillBusShoulders });
+                            FillBusShoulders = request.Preset.FillBusShoulders, PresetId = request.Preset.Rule.Id });
                         if (!setting.Enabled) { setting.Enabled = true; setting.ApplyAndSave(); }
                         QueueRoadStyleRebuild(target);
                         request.NativeTargets.Remove(target);

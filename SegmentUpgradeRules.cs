@@ -12,12 +12,13 @@ namespace SurfaceNetworkFilter
     {
         public SurfaceRule Rule { get; set; }
         public bool FillBusShoulders { get; set; }
+        public bool UpdateExistingSegments { get; set; }
     }
 
     public sealed partial class Setting
     {
-        // Presets are inert settings. The native road tool copies them into
-        // city-saved segment records when drawing or replacing roads.
+        // The road tool copies presets into city-saved records. Presets can
+        // optionally update their linked roads after subsequent edits.
         [SettingsUIHidden]
         public string SegmentPresetsJson { get; set; } = "";
         internal List<SegmentUpgradePreset> GetSegmentPresets()
@@ -85,6 +86,7 @@ namespace SurfaceNetworkFilter
                 // surface asset is unavailable. Only the shoulder switch changes.
                 saved.FillBusShoulders = false;
                 EntityManager.SetComponentData(record, saved);
+                SetSegmentPresetLink(record, "");
                 return;
             }
             if (!UsesCityRules(edge)) return;

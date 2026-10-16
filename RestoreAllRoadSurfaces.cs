@@ -34,6 +34,7 @@ namespace SurfaceNetworkFilter
 
             EntityManager.DestroyEntity(GetEntityQuery(ComponentType.ReadOnly<SavedSegmentSurfaceRule>()));
             m_SegmentRuleRecords.Clear();
+            ResetSegmentPresetUpdates();
             EntityManager.RemoveComponent(GetEntityQuery(ComponentType.ReadOnly<CitySurfaceRuleMember>()), ComponentType.ReadWrite<CitySurfaceRuleMember>());
             EntityManager.DestroyEntity(GetEntityQuery(ComponentType.ReadOnly<SavedJunctionSurface>()));
             EntityManager.RemoveComponent(GetEntityQuery(ComponentType.ReadOnly<JunctionSurfacePriority>()), ComponentType.ReadWrite<JunctionSurfacePriority>());

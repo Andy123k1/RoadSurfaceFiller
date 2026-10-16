@@ -19,12 +19,15 @@ namespace SurfaceNetworkFilter
                 copy.Category = RoadCategory.AllRoads; copy.RoadPrefab = ""; copy.Enabled = true;
                 List<SegmentUpgradePreset> presets = Mod.ActiveSetting.GetSegmentPresets();
                 presets.Add(new SegmentUpgradePreset { Rule = copy, FillBusShoulders = copy.FillBusShoulders }); Mod.ActiveSetting.StoreSegmentPresets(presets);
+                RuntimeState.NotifySegmentPresetsChanged();
                 m_Message = "Copied to Segment rules. Choose it in the road tool's Surface rule picker when drawing or using Replace."; Publish();
             }));
             AddBinding(new TriggerBinding<string>(Group, "deleteSegmentPreset", id => {
                 if (!IsInLoadedCity() || Mod.ActiveSetting == null) return;
                 List<SegmentUpgradePreset> presets = Mod.ActiveSetting.GetSegmentPresets();
+                SegmentUpgradePreset previous = presets.Find(item => item.Rule.Id == id);
                 presets.RemoveAll(item => item.Rule.Id == id); Mod.ActiveSetting.StoreSegmentPresets(presets);
+                RuntimeState.NotifySegmentPresetsChanged(previous);
                 if (RuntimeState.NewRoadPresetId == id) RuntimeState.NewRoadPresetId = "";
                 m_Message = "Segment rule deleted. Previously upgraded segments keep their saved surfaces."; Publish();
             }));
@@ -85,9 +88,14 @@ namespace SurfaceNetworkFilter
                 if (rule.Name.Length > 120) rule.Name = rule.Name.Substring(0, 120);
                 List<SegmentUpgradePreset> presets = Mod.ActiveSetting.GetSegmentPresets();
                 int index = presets.FindIndex(item => item.Rule.Id == rule.Id);
+                SegmentUpgradePreset previous = index < 0 ? null : presets[index];
                 if (index < 0) { rule.Id = Guid.NewGuid().ToString("N"); presets.Add(draft); } else presets[index] = draft;
                 Mod.ActiveSetting.StoreSegmentPresets(presets); m_SavedRuleId = rule.Id;
-                m_Message = "Segment rule saved. Choose it in the road tool's Surface rule picker when drawing or using Replace. General rules are optional."; Publish();
+                RuntimeState.NotifySegmentPresetsChanged(previous);
+                m_Message = draft.UpdateExistingSegments ?
+                    "Segment rule saved. Roads using this preset are queued to update. Independent customizations keep their finishes." :
+                    "Segment rule saved. Placed roads keep their finishes. Use the road tool's Surface rule picker when drawing or using Replace.";
+                Publish();
             }
             catch (Exception exception) when (exception is JsonException || exception is ArgumentException)
             {

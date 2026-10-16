@@ -44,6 +44,7 @@ namespace SurfaceNetworkFilter
         public string Key { get; set; } = "";
         public SurfaceRule Rule { get; set; }
         public bool FillBusShoulders { get; set; }
+        public string PresetId { get; set; } = "";
     }
 
     internal static partial class RuntimeState
@@ -73,6 +74,7 @@ namespace SurfaceNetworkFilter
 
         private void ResetSegmentRules()
         {
+            ResetSegmentPresetUpdates();
             m_SegmentRuleRecords.Clear(); m_SegmentRuleReplacements.Clear(); m_MissingSegmentRules.Clear(); m_SegmentRulesInitialized = false;
             RuntimeState.SegmentRuleRequests.Clear(); RuntimeState.SegmentRule = null;
             RuntimeState.SegmentRuleKey = RuntimeState.SegmentRuleRoad = RuntimeState.SegmentRuleMessage = RuntimeState.SavedSegmentRuleKey = "";
@@ -179,7 +181,11 @@ namespace SurfaceNetworkFilter
                 foreach (Entity original in new List<Entity>(m_SegmentRuleRecords.Keys))
                 {
                     Entity record = m_SegmentRuleRecords[original];
-                    if (IsRoadEdge(original)) { m_MissingSegmentRules.Remove(record); continue; }
+                    if (IsRoadEdge(original))
+                    {
+                        if (m_MissingSegmentRules.Remove(record)) QueueSegmentPresetRefresh(record);
+                        continue;
+                    }
                     Entity replacement = Entity.Null;
                     foreach (KeyValuePair<Entity, Entity> candidate in m_SegmentRuleReplacements)
                         if (candidate.Value == record && IsRoadEdge(candidate.Key)) { replacement = candidate.Key; break; }
@@ -188,6 +194,7 @@ namespace SurfaceNetworkFilter
                         SavedSegmentSurfaceRule saved = EntityManager.GetComponentData<SavedSegmentSurfaceRule>(record);
                         saved.Edge = replacement; EntityManager.SetComponentData(record, saved);
                         m_SegmentRuleRecords.Remove(original); m_SegmentRuleRecords[replacement] = record;
+                        QueueSegmentPresetRefresh(record);
                         m_MissingSegmentRules.Remove(record); QueueManualEdge(replacement);
                         // A new junction can split the original segment. Only
                         // exact native original-edge links inherit its rule.
@@ -205,6 +212,7 @@ namespace SurfaceNetworkFilter
                         m_SegmentRuleReplacements.Remove(candidate);
             }
             UpdateSegmentUpgrades(setting);
+            UpdateSegmentPresetLinks(setting);
             while (RuntimeState.SegmentRuleRequests.Count > 0)
             {
                 RuntimeState.SegmentRuleRequest request = RuntimeState.SegmentRuleRequests[0];
@@ -240,6 +248,8 @@ namespace SurfaceNetworkFilter
             EntityManager.SetComponentData(record, EntityManager.GetComponentData<PrefabRef>(edge));
             DynamicBuffer<SavedSegmentSurfaceTarget> targets = EntityManager.AddBuffer<SavedSegmentSurfaceTarget>(record);
             foreach (SavedSegmentSurfaceTarget item in EntityManager.GetBuffer<SavedSegmentSurfaceTarget>(source, true)) targets.Add(item);
+            SetSegmentPresetLink(record, CaptureSegmentPresetId(source));
+            QueueSegmentPresetRefresh(record);
             m_SegmentRuleRecords[edge] = record; QueueManualEdge(edge);
         }
 
@@ -268,6 +278,8 @@ namespace SurfaceNetworkFilter
             DynamicBuffer<SavedSegmentSurfaceTarget> buffer = EntityManager.GetBuffer<SavedSegmentSurfaceTarget>(record);
             buffer.Clear(); foreach (SavedSegmentSurfaceTarget target in targets) buffer.Add(target);
             EntityManager.SetComponentData(record, new PrefabRef { m_Prefab = EntityManager.GetComponentData<PrefabRef>(edge).m_Prefab });
+            SetSegmentPresetLink(record, draft.PresetId ?? "");
+            QueueSegmentPresetRefresh(record);
         }
 
         private void RemoveSegmentRule(Entity edge)

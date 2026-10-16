@@ -4,6 +4,14 @@ Road Surface Filler creates native surface areas over road pavement and road-ass
 
 Open **RoadSurfaceFiller.sln** to work with the existing project in Visual Studio. The official template's publishing profiles and a draft mod-page configuration are included; see [PUBLISHING.md](PUBLISHING.md).
 
+## Optional preset updates: 0.5.23
+
+- Segment rule presets have an **Update placed roads when this preset is saved** toggle. When on, saving the preset updates roads using it. When off, each road keeps its applied finish until the preset is reapplied with Replace. Existing presets default to off.
+- Preset links save with the city and transfer with roads when the native tool splits or replaces them. Linked roads also catch up on city load when their preset has automatic updates enabled.
+- Roads from earlier builds are linked only when their saved name, surface targets, lane modes and shoulder setting match one preset exactly. Ambiguous matches remain independent; apply the intended preset with Replace once to establish its link.
+- Using a shoulder fill/removal tool makes that segment's finish independent, preserving those local adjustments during later preset edits. Replace can link it to a preset again. Restoring vanilla surfaces or applying another preset ends the previous association.
+- Changes are applied in small batches through the existing surface reconciliation queue. Existing save-component layouts are retained.
+
 ## Display name update: 0.5.22
 
 - The mod is now named **Road Surface Filler** in Options, the rule manager, toolbar tooltip, accessible labels and assembly display metadata.
@@ -129,13 +137,13 @@ Close the game before installing a build. To compile and post-process while the 
 ### Segment rule presets
 
 1. Open **Segment rules → New segment rule**. A general rule is not required; **Copy to Segment rules** remains available for reuse.
-2. Choose the rule's target surfaces and lane handling, then save. No roads change.
+2. Choose the rule's target surfaces and lane handling. Leave **Update placed roads when this preset is saved** off to keep placed finishes, or turn it on to update roads already using the preset when you save.
 3. Choose it in the native road tool's **Surface rule** picker, then draw new roads or use **Replace** on existing roads. Click or drag across roads to apply the preset.
-4. Each committed segment receives its own city-saved copy. Use **Tools → Restore vanilla surfaces** to remove this mod's local and city finishes from selected roads, or use **Replace** with **None (vanilla)**.
+4. Each committed segment receives a city-saved copy linked to the preset. The toggle controls whether later preset edits update that copy. Use **Tools → Restore vanilla surfaces** to remove this mod's local and city finishes from selected roads, or use **Replace** with **None (vanilla)**.
 
 **Fill bus-lane shoulders** is a separate tool for a quick paved-shoulder extension without replacing other local target settings. It can use the existing custom bus finish or a chosen surface. On bus-only roads the paved terminal cap receives the bus finish too. Raised sidewalks, planting beds, tree strips, active car lanes and bicycle lanes stay excluded.
 
-Presets save with global mod settings and never participate in automatic road matching. Applied copies save with each city in the original v0.4.1 record schema. Native original-edge links transfer existing upgrades when upgrading a road or splitting it with a junction; unrelated new roads do not inherit them. Existing placement/network/elevation filters still apply. Junction pavement priority is controlled in Tools.
+Presets save with global mod settings. Applied copies save with each city in the original v0.4.1 record schema, with a separate optional component recording their preset link. Native original-edge links transfer existing upgrades and preset links when upgrading a road or splitting it with a junction; unrelated new roads do not inherit them. Presets with automatic updates enabled also update their linked roads on city load. Existing network/elevation filters still apply. Junction pavement priority is controlled in Tools.
 
 ### Roundabout pavement boundaries (v0.5.0)
 

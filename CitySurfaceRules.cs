@@ -203,7 +203,8 @@ namespace SurfaceNetworkFilter
                     if (preset == null || TryGetSegmentRule(preview, out _, out _)) continue;
                     try
                     {
-                        SaveSegmentRule(preview, new SegmentRuleDraft { Rule = preset.Rule, FillBusShoulders = preset.FillBusShoulders });
+                        SaveSegmentRule(preview, new SegmentRuleDraft { Rule = preset.Rule, FillBusShoulders = preset.FillBusShoulders,
+                            PresetId = preset.Rule.Id });
                         if (!setting.Enabled) { setting.Enabled = true; setting.ApplyAndSave(); }
                         QueueManualEdge(preview);
                     }

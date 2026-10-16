@@ -11,12 +11,15 @@ This mod was made using AI. I am not a developer and have zero programming knowl
 
 If you are a developer willing to take over maintenance, please contact me. I am happy to share the source files or arrange a handover through GitHub so the project can continue to be supported.
 
+Source code, bug reports and maintenance enquiries: [Road Surface Filler on GitHub](https://github.com/Andy123k1/RoadSurfaceFiller).
+
 # Road Surface Filler
 
 Give your roads custom pavement, sidewalk, bike-lane and bus-lane finishes using the surfaces installed in your game.
 
 ## Features
 - Create reusable surface presets for different roads and lanes.
+- Choose whether editing a preset updates roads already using it or keeps their existing finishes.
 - Choose a preset while drawing roads, or use the road tool's Replace mode to restyle existing segments.
 - Apply general rules to existing roads with Apply city rules.
 - Cycle the junction finish between connected road and bus-lane surfaces while keeping bike-lane surfaces visible.
@@ -42,13 +45,13 @@ Surface appearance depends on the road geometry and the selected surface assets.
   <Screenshot Value="Properties/Screenshots/04-road-surface-example.png" />
   <Tag Value="Code Mod" />
   <!-- Add a discussion link with ForumLink Value="https://...". -->
-  <ModVersion Value="0.5.22" />
+  <ModVersion Value="0.5.23" />
   <!-- Current locally installed game version; review for each release. -->
   <GameVersion Value="1.6.2f1" />
   <!-- Add Dependency Id="..." only for a required mod. -->
   <!-- Add RequiredDLC Value="..." only when a DLC is required. -->
   <ChangeLog Value="Initial release of Road Surface Filler." />
-  <!-- Add source/support links using ExternalLink Type="github" Url="https://...". -->
+  <ExternalLink Type="github" Url="https://github.com/Andy123k1/RoadSurfaceFiller" />
   <!-- Start with a private listing for review; change to Public when ready. -->
   <AccessLevel Value="Private" />
 </Publish>

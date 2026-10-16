@@ -335,6 +335,7 @@ namespace SurfaceNetworkFilter
             int oldCount = RuntimeState.GetSurfaceCount();
             bool roadNamesChanged = RefreshRoadCatalog();
             bool surfaceNamesChanged = RuntimeState.ReplaceSurfaceCatalog(catalog);
+            if (surfaceNamesChanged) RuntimeState.NotifySegmentPresetsChanged();
             if (surfaceNamesChanged || roadNamesChanged)
             {
                 Mod.RefreshOptionsUI();
