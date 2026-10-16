@@ -8,6 +8,8 @@ The project already uses the official CS2 template's `Mod.props` and `Mod.target
 
 The publishing profiles were copied from the installed **Colossal Order Mod Template 1.0.0**. Their deployment folder is set to `artifacts\publish\content` so publishing content is prepared separately from the installed local mod.
 
+Keep `DeployDir` without a trailing backslash. The official publisher command quotes this path; a final backslash escapes its closing quote on Windows and causes the publisher to treat `-v` as part of the folder name.
+
 ## Review the mod page
 
 Edit **Properties/PublishConfiguration.xml**. It includes:

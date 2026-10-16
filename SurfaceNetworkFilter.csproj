@@ -23,10 +23,11 @@
   <!-- Stage the fully post-processed build without touching a running game's
        installation: dotnet build -c Release -p:SurfaceNetworkFilterStageOnly=true -->
   <!-- The official build target resets DeployDir. Apply the selected publish
-       profile's isolated content path after that target has run. -->
+       profile's isolated content path after that target has run. Keep the path
+       free of a trailing backslash so it is safe in the publisher's quotes. -->
   <Target Name="ConfigurePublishingContent" AfterTargets="BuildGetFullPaths" Condition="'$(ModPublisherCommand)'!=''">
     <PropertyGroup>
-      <DeployDir>$(MSBuildProjectDirectory)\artifacts\publish\content\</DeployDir>
+      <DeployDir>$(MSBuildProjectDirectory)\artifacts\publish\content</DeployDir>
     </PropertyGroup>
   </Target>
 
