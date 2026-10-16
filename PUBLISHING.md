@@ -23,6 +23,8 @@ Edit **Properties/PublishConfiguration.xml**. It includes:
 
 Before releasing, review the description, compatibility version, included screenshots and **Code Mod** tag, and include any source, support or required-mod links. Optional surface packs can be linked in the description. Change AccessLevel to **Public** when the listing is ready for players.
 
+Every referenced thumbnail and screenshot is below 2 MB to fit the publisher's 2.1 MB image limit. The two larger screenshots use JPEG upload copies at their original dimensions; their original PNG files remain in the project.
+
 ## Publish from Visual Studio
 
 1. Right-click **Road Surface Filler** in Solution Explorer and choose **Publish**.

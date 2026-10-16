@@ -41,8 +41,8 @@ Surface appearance depends on the road geometry and the selected surface assets.
   <Thumbnail Value="Properties/Thumbnail.png" />
   <Screenshot Value="Properties/Screenshots/01-general-rules.png" />
   <Screenshot Value="Properties/Screenshots/02-surface-tools.png" />
-  <Screenshot Value="Properties/Screenshots/03-rule-editor-and-roads.png" />
-  <Screenshot Value="Properties/Screenshots/04-road-surface-example.png" />
+  <Screenshot Value="Properties/Screenshots/03-rule-editor-and-roads.jpg" />
+  <Screenshot Value="Properties/Screenshots/04-road-surface-example.jpg" />
   <Tag Value="Code Mod" />
   <!-- Add a discussion link with ForumLink Value="https://...". -->
   <ModVersion Value="0.5.23" />
