@@ -4,6 +4,14 @@ Road Surface Filler creates native surface areas over road pavement and road-ass
 
 Open **RoadSurfaceFiller.sln** to work with the existing project in Visual Studio. The official template's publishing profiles and a draft mod-page configuration are included; see [PUBLISHING.md](PUBLISHING.md).
 
+## Roundabout rules and native contour precision: 0.5.27
+
+- Roundabouts connected entirely to highways now use highway categories and exact highway-prefab rules, with a consistent connected-road reference. Rings with street approaches retain street-rule selection. Highway/street inclusion switches, optional highway sidewalks and saved junction choices remain part of that selection.
+- Resolve clipped contours at native float positions before partitioning. Integer cut points that collapse onto the same game coordinate no longer force a complete footprint back into hundreds of triangle areas. The existing footprint-area check still compares against the original boolean result.
+- Split positive lobes where an outline touches itself at a native position. Negative lobes remain holes and use hole partitioning; they are never reversed and filled. The existing per-road material/deck grouping and final edge guards remain active.
+- These changes use road classifications and geometry; there are no city-, road-name- or junction-ID-specific generation conditions. Diagnostic node IDs only identify logged examples.
+- The 0.5.26 city log reported about 9,000 managed areas, with some contour recovery cases remaining. Coverage and counts for this update still require an in-game check. Use **Rebuild applied surfaces** after installing it.
+
 ## Junction compaction follow-up: 0.5.26
 
 - Retain verified mesh perimeters for both paint and complete mask footprints. A topology/area check rejects flattened or folded meshes, which retain triangle union handling. This avoids reconstructing clean boundaries from independent triangles after each clipping step.

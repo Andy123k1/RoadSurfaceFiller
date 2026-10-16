@@ -41,11 +41,16 @@ namespace SurfaceNetworkFilter
             if (!ExecuteSurfacePolygons(subjects, masks,
                 intersection ? ClipType.Intersection : ClipType.Difference, footprint))
                 return ReportCompactFootprintFailure(mesh, cells.Count, "integer boolean");
+            double expected = footprint.Area() / (SurfacePolygonScale * SurfacePolygonScale);
+            // Resolve the topology at the positions the native engine can
+            // actually store. Sub-float gaps/touches in the integer solution
+            // must not force hundreds of triangle fallback areas.
+            footprint = NormalizeNativeSurfaceFootprint(footprint);
             SurfacePatch compact = CopySurfacePatchProperties(source);
             int partitions = 0;
             if (!AppendSurfacePolygonTree(footprint, mesh, compact, 0, ref partitions))
                 return ReportCompactFootprintFailure(mesh, cells.Count, "native contour partition");
-            double expected = footprint.Area() / (SurfacePolygonScale * SurfacePolygonScale), actual = 0d;
+            double actual = 0d;
             foreach (SurfacePatch part in compact.Parts)
                 foreach (int3 face in part.Triangles)
                     actual += Math.Abs(LaneCellSide(part.Nodes[face.z].m_Position,
@@ -62,6 +67,30 @@ namespace SurfaceNetworkFilter
                     "; mask cells=" + cells.Count + "; areas=" + compact.Parts.Count +
                     "; hole/complexity cuts=" + partitions + "; footprint=" + actual.ToString("0.###") + " m2.");
             return true;
+        }
+
+        private static PolyTree64 NormalizeNativeSurfaceFootprint(PolyTree64 footprint)
+        {
+            Paths64 paths = new Paths64();
+            bool changed = false;
+            foreach (Path64 path in Clipper.PolyTreeToPaths64(footprint))
+            {
+                Path64 native = new Path64(path.Count);
+                foreach (Point64 point in path)
+                {
+                    float x = (float)(point.X / SurfacePolygonScale), z = (float)(point.Y / SurfacePolygonScale);
+                    Point64 snapped = new Point64((double)x * SurfacePolygonScale, (double)z * SurfacePolygonScale);
+                    if (snapped != point) changed = true;
+                    if (native.Count == 0 || native[native.Count - 1] != snapped) native.Add(snapped);
+                    else changed = true;
+                }
+                if (native.Count > 1 && native[0] == native[native.Count - 1])
+                { native.RemoveAt(native.Count - 1); changed = true; }
+                if (native.Count >= 3) paths.Add(native);
+            }
+            if (!changed) return footprint;
+            PolyTree64 result = new PolyTree64();
+            return ExecuteSurfacePolygons(paths, new Paths64(), ClipType.Union, result) ? result : footprint;
         }
 
         private static void AddSurfacePolygonPaths(SurfacePatch patch, Paths64 paths)
@@ -240,6 +269,17 @@ namespace SurfaceNetworkFilter
             if (outline == null || outline.Count < 3) return true;
             double area = Math.Abs(Clipper.Area(outline)) / (SurfacePolygonScale * SurfacePolygonScale);
             if (area <= 0.00005d) return true;
+            if (outer.Count == 0 && TrySplitTouchingSurfaceOutline(outline, out List<Path64> lobes))
+            {
+                if (depth >= 20 || ++partitions > 256) return false;
+                foreach (Path64 lobe in lobes)
+                {
+                    PolyTree64 tree = new PolyTree64();
+                    PolyPath64 piece = (PolyPath64)tree.AddChild(lobe);
+                    if (!AppendSurfacePolygonRegion(piece, mesh, result, depth + 1, ref partitions)) return false;
+                }
+                return true;
+            }
             if (outer.Count == 0 && outline.Count <= SurfacePolygonNodeLimit)
             {
                 float3 origin = mesh.Nodes[0].m_Position;
@@ -285,6 +325,50 @@ namespace SurfaceNetworkFilter
                     !AppendSurfacePolygonTree(pieces, mesh, result, depth + 1, ref partitions)) return false;
             }
             return true;
+        }
+
+        private static bool TrySplitTouchingSurfaceOutline(Path64 outline, out List<Path64> lobes)
+        {
+            List<Path64> pending = new List<Path64> { outline };
+            lobes = new List<Path64>();
+            bool split = false;
+            // Each split consumes a repeated vertex, so this work is bounded
+            // by the original perimeter. Do not spend the spatial cut depth
+            // budget on a chain of point-touching lobes.
+            for (int i = 0; i < pending.Count; i++)
+                if (TrySplitOneTouchingSurfaceOutline(pending[i], out List<Path64> pieces))
+                { pending.AddRange(pieces); split = true; }
+                else lobes.Add(pending[i]);
+            return split;
+        }
+
+        private static bool TrySplitOneTouchingSurfaceOutline(Path64 outline, out List<Path64> lobes)
+        {
+            lobes = null;
+            Dictionary<long, int> vertices = new Dictionary<long, int>();
+            for (int i = 0; i < outline.Count; i++)
+            {
+                // Distinct integer cut points can become the same native float
+                // position. Split positive lobes at that touch instead of
+                // repeatedly bisecting an outline native ear clipping rejects.
+                Point64 point = outline[i];
+                float x = (float)(point.X / SurfacePolygonScale), z = (float)(point.Y / SurfacePolygonScale);
+                long key = ((long)math.asuint(x) << 32) | math.asuint(z);
+                if (!vertices.TryGetValue(key, out int first)) { vertices.Add(key, i); continue; }
+                Path64 a = new Path64(), b = new Path64();
+                for (int j = first; j < i; j++) a.Add(outline[j]);
+                for (int j = i; j < outline.Count; j++) b.Add(outline[j]);
+                for (int j = 0; j < first; j++) b.Add(outline[j]);
+                // A negative lobe is a touching hole. It needs a genuine cut,
+                // never reversal/filling. Leave that case to hole partitioning.
+                double aa = a.Count >= 3 ? Clipper.Area(a) : 0d, ba = b.Count >= 3 ? Clipper.Area(b) : 0d;
+                if (aa < -1d || ba < -1d) continue;
+                lobes = new List<Path64>();
+                if (aa > 1d) lobes.Add(a);
+                if (ba > 1d) lobes.Add(b);
+                return true;
+            }
+            return false;
         }
     }
 }

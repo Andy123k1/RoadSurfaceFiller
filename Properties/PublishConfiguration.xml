@@ -46,12 +46,12 @@ Surface appearance depends on the road geometry and the selected surface assets.
   <Screenshot Value="Properties/Screenshots/05-road-junction-surfaces.jpg" />
   <Tag Value="Code Mod" />
   <!-- Add a discussion link with ForumLink Value="https://...". -->
-  <ModVersion Value="0.5.26" />
+  <ModVersion Value="0.5.27" />
   <!-- Current locally installed game version; review for each release. -->
   <GameVersion Value="1.6.2f1" />
   <!-- Add Dependency Id="..." only for a required mod. -->
   <!-- Add RequiredDLC Value="..." only when a DLC is required. -->
-  <ChangeLog Value="Further reduce junction and roundabout fragmentation: retain verified mesh perimeters, repair millimetre-scale numerical seams before protection masks, and merge compatible same-material pieces across each road's complete generation plan. Preserve independent road ownership, projection limits and differing surface heights. Rebuild applied surfaces after updating; logs now report area counts before and after the final merge." />
+  <ChangeLog Value="Fix highway-only roundabouts using street rule context, which could exclude their highway finishes. Keep street rules for rings with street approaches. Normalize clipped contours to native float precision and split positive point-touching lobes locally to reduce triangle fallback fragmentation. Preserve island holes, protection masks and complete-road merging. Rebuild applied surfaces after updating." />
   <ExternalLink Type="github" Url="https://github.com/Andy123k1/RoadSurfaceFiller" />
   <AccessLevel Value="Public" />
 </Publish>

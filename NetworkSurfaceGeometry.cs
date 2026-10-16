@@ -38,6 +38,7 @@ namespace SurfaceNetworkFilter
         private bool m_LoggedRoundaboutCounts;
         private bool m_LoggedStreetJunctionRules;
         private bool m_LoggedRoundaboutStreetRules;
+        private readonly HashSet<Entity> m_LoggedRoundaboutRuleContexts = new HashSet<Entity>();
         private bool m_LoggedJunctionMapping;
 
         private struct CornerInsets
@@ -519,7 +520,10 @@ namespace SurfaceNetworkFilter
             Entity physicalMain = roundabout ? Entity.Null : GetOrdinaryJunctionReferencePrefab(node);
             bool highwayThroughJunction = physicalMain != Entity.Null && IsHighwayPrefab(physicalMain);
             bool hasStreet = TryGetConnectedStreetPrefab(node, out Entity streetPrefab);
-            bool streetContext = roundabout || (approach.Highway && hasStreet && !highwayThroughJunction);
+            // A ring with street approaches uses their street rules. A purely
+            // highway ring must keep highway categories and exact-prefab rules;
+            // forcing street context silently excludes those finishes.
+            bool streetContext = (roundabout && hasStreet) || (approach.Highway && hasStreet && !highwayThroughJunction);
             SurfaceLayout fallback = approach;
             if (streetContext)
             {
@@ -553,7 +557,20 @@ namespace SurfaceNetworkFilter
                     else m_LoggedStreetJunctionRules = true;
                 }
             }
-            if (!TryReadSurfaceLayout(prefab, out SurfaceLayout layout, fallback, start, streetContext: streetContext))
+            else if (roundabout)
+            {
+                if (!setting.IncludeHighways && !manualPavement) return;
+                Entity rulePrefab = GetJunctionReferencePrefab(node, false);
+                if (rulePrefab == Entity.Null) return;
+                Entity ruleEdge = FindJunctionRuleRoad(node, rulePrefab, owner);
+                roads = GetChoices(setting, SurfaceTarget.Roads, rulePrefab, segment: ruleEdge);
+                sidewalks = setting.IncludeHighwaySidewalks ? GetChoices(setting, SurfaceTarget.Sidewalks,
+                    rulePrefab, segment: ruleEdge) : new List<SurfaceChoice>();
+                name = m_PrefabSystem.GetPrefabName(rulePrefab);
+                curve = JunctionMaterialSeed(curve, node);
+            }
+            if (!TryReadSurfaceLayout(prefab, out SurfaceLayout layout, fallback, start,
+                highway: roundabout && !streetContext && approach.Highway, streetContext: streetContext))
             {
                 if (!m_LoggedMissingNodeLayout)
                 {
@@ -626,6 +643,10 @@ namespace SurfaceNetworkFilter
                 SurfaceChoice bus = FilledBusJunctionChoice(source, setting);
                 if (bus != null) road = bus;
             }
+            if (roundabout && m_LoggedRoundaboutRuleContexts.Count < 16 && m_LoggedRoundaboutRuleContexts.Add(node))
+                Mod.Log.Info("Roundabout rule context: node=" + node.Index + "; has street=" + hasStreet +
+                    "; street rules=" + streetContext + "; highway approach=" + approach.Highway +
+                    "; pavement=" + (road == null ? "<none>" : m_PrefabSystem.GetPrefabName(road.Prefab)) + ".");
             bool intersection = (layout.Composition.m_Flags.m_General & CompositionFlags.General.Intersection) != 0;
             bool separatedConnection = (m_ActiveJunctionLaneProfile == null || m_ActiveJunctionLaneProfile.Strips.Count == 0) &&
                 !roundabout && !intersection && !JunctionCoversBusLanes(node) && HasSeparatedLanes(layout, setting) &&
@@ -746,7 +767,7 @@ namespace SurfaceNetworkFilter
                 : (left ? geometry.m_Left.m_Left.d : geometry.m_Right.m_Right.d);
             float bestDistance = 0.04f;
             CornerInsets result = original;
-            bool streetContext = roundabout || TryGetConnectedStreetPrefab(node, out _);
+            bool streetContext = TryGetConnectedStreetPrefab(node, out _);
             // Native corner curves from two adjoining roads share their end point.
             // Blend their physical curb widths to that same point, so small and
             // large road sidewalks meet without leaving a wedge or overlap.
@@ -770,7 +791,8 @@ namespace SurfaceNetworkFilter
                 Composition otherComposition = EntityManager.GetComponentData<Composition>(other);
                 TryReadSurfaceLayout(otherComposition.m_Edge, out SurfaceLayout otherApproach, highway: IsHighway(other), streetContext: streetContext);
                 if (!TryReadSurfaceLayout(start ? otherComposition.m_StartNode : otherComposition.m_EndNode,
-                    out SurfaceLayout otherLayout, otherApproach, start, streetContext: streetContext))
+                    out SurfaceLayout otherLayout, otherApproach, start,
+                    highway: roundabout && !streetContext && IsHighway(other), streetContext: streetContext))
                     continue;
                 if (roundabout)
                     RecoverRoundaboutSidewalks(node, otherGeometry, otherLayout);

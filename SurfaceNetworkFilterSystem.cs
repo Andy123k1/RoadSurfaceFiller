@@ -222,6 +222,7 @@ namespace SurfaceNetworkFilter
             m_LoggedRoundaboutGeometry = m_LoggedBridgeHeight = m_LoggedProjection = false;
             m_LoggedMeshReadFailure = m_LoggedMissingNodeLayout = m_LoggedJunctionCounts = m_LoggedRoundaboutCounts = false;
             m_LoggedStreetJunctionRules = m_LoggedRoundaboutStreetRules = false;
+            m_LoggedRoundaboutRuleContexts.Clear();
             m_LoggedJunctionMapping = false;
             m_LoggedRoundaboutSidewalks.Clear();
             m_LoggedSmallRoundabouts.Clear();
