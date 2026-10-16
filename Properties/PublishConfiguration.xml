@@ -1,0 +1,54 @@
+<Publish>
+  <!-- Keep the ID assigned by PDX Mods here after the first publication. -->
+  <ModId Value="" />
+  <DisplayName Value="Road Surface Filler" />
+  <ShortDescription Value="Apply custom surfaces to road pavement, sidewalks, bike lanes and bus lanes, with reusable presets and junction controls." />
+  <!-- Draft mod-page text. Markdown starts at the left margin intentionally. -->
+  <LongDescription>
+## AI development and maintenance disclaimer
+
+This mod was made using AI. I am not a developer and have zero programming knowledge, so I may struggle to fix bugs, keep the mod working after game updates, or maintain it over time.
+
+If you are a developer willing to take over maintenance, please contact me. I am happy to share the source files or arrange a handover through GitHub so the project can continue to be supported.
+
+# Road Surface Filler
+
+Give your roads custom pavement, sidewalk, bike-lane and bus-lane finishes using the surfaces installed in your game.
+
+## Features
+- Create reusable surface presets for different roads and lanes.
+- Choose a preset while drawing roads, or use the road tool's Replace mode to restyle existing segments.
+- Apply general rules to existing roads with Apply city rules.
+- Cycle the junction finish between connected road and bus-lane surfaces while keeping bike-lane surfaces visible.
+- Fill adjacent paved bus-lane shoulders, or remove that shoulder fill from selected roads.
+- Restore selected roads or all roads to vanilla surfaces.
+- Manage rules in a movable, resizable panel with collapsible rule cards.
+
+## Getting started
+Open the RSF button beside the Info button. Create a preset under Segment rules, then select it in the road tool's Surface rule picker. To apply general rules across existing roads, create them under General rules and choose Apply city rules.
+
+## Surface packs
+This mod uses available surface assets; it does not include the custom surface packs shown in screenshots. Install the packs containing the finishes you want to use. Those packs may have their own dependencies.
+
+## Saved cities
+Segment finishes and junction choices are saved with the city. Rule and preset libraries remain in the mod's settings.
+
+Surface appearance depends on the road geometry and the selected surface assets. When reporting a problem, include a screenshot, the road type and the surface pack used.
+  </LongDescription>
+  <Thumbnail Value="Properties/Thumbnail.png" />
+  <Screenshot Value="Properties/Screenshots/01-general-rules.png" />
+  <Screenshot Value="Properties/Screenshots/02-surface-tools.png" />
+  <Screenshot Value="Properties/Screenshots/03-rule-editor-and-roads.png" />
+  <Screenshot Value="Properties/Screenshots/04-road-surface-example.png" />
+  <Tag Value="Code Mod" />
+  <!-- Add a discussion link with ForumLink Value="https://...". -->
+  <ModVersion Value="0.5.22" />
+  <!-- Current locally installed game version; review for each release. -->
+  <GameVersion Value="1.6.2f1" />
+  <!-- Add Dependency Id="..." only for a required mod. -->
+  <!-- Add RequiredDLC Value="..." only when a DLC is required. -->
+  <ChangeLog Value="Initial release of Road Surface Filler." />
+  <!-- Add source/support links using ExternalLink Type="github" Url="https://...". -->
+  <!-- Start with a private listing for review; change to Public when ready. -->
+  <AccessLevel Value="Private" />
+</Publish>

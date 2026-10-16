@@ -1,0 +1,62 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Configurations>Debug;Release</Configurations>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <AssemblyName>SurfaceNetworkFilter</AssemblyName>
+    <RootNamespace>SurfaceNetworkFilter</RootNamespace>
+    <AssemblyTitle>Road Surface Filler</AssemblyTitle>
+    <Product>Road Surface Filler</Product>
+    <Version>0.5.22</Version>
+    <PublishConfigurationPath>Properties\PublishConfiguration.xml</PublishConfigurationPath>
+  </PropertyGroup>
+
+  <Import Project="$([System.Environment]::GetEnvironmentVariable('CSII_TOOLPATH', 'EnvironmentVariableTarget.User'))\Mod.props" />
+  <Import Project="$([System.Environment]::GetEnvironmentVariable('CSII_TOOLPATH', 'EnvironmentVariableTarget.User'))\Mod.targets" />
+
+  <ItemGroup>
+    <None Update="UI\SurfaceNetworkFilter.mjs;UI\SurfaceNetworkFilter.css;UI\SurfaceNetworkFilter.svg" CopyToOutputDirectory="PreserveNewest" TargetPath="%(Filename)%(Extension)" />
+    <None Include="$(ModPropsFile)" Link="Properties\Mod.props" />
+    <None Include="$(ModTargetsFile)" Link="Properties\Mod.targets" />
+  </ItemGroup>
+
+  <!-- Stage the fully post-processed build without touching a running game's
+       installation: dotnet build -c Release -p:SurfaceNetworkFilterStageOnly=true -->
+  <!-- The official build target resets DeployDir. Apply the selected publish
+       profile's isolated content path after that target has run. -->
+  <Target Name="ConfigurePublishingContent" AfterTargets="BuildGetFullPaths" Condition="'$(ModPublisherCommand)'!=''">
+    <PropertyGroup>
+      <DeployDir>$(MSBuildProjectDirectory)\artifacts\publish\content\</DeployDir>
+    </PropertyGroup>
+  </Target>
+
+  <Target Name="DeployWIP" AfterTargets="AfterBuild" Condition="'$(NeedBuild)'">
+    <PropertyGroup>
+      <SurfaceNetworkFilterOutput>$(DeployDir)</SurfaceNetworkFilterOutput>
+      <SurfaceNetworkFilterOutput Condition="'$(SurfaceNetworkFilterStageOnly)'=='true'">$(MSBuildProjectDirectory)\artifacts\v$(Version)</SurfaceNetworkFilterOutput>
+      <SurfaceNetworkFilterOutput Condition="'$(ModPublisherCommand)'!=''">$(DeployDir)</SurfaceNetworkFilterOutput>
+    </PropertyGroup>
+    <ItemGroup>
+      <FilesToDeploy Include="$(OutDir)\**\*.*" />
+    </ItemGroup>
+    <Message Text="Copy processed output to $(SurfaceNetworkFilterOutput)" Importance="high" />
+    <MakeDir Directories="$(SurfaceNetworkFilterOutput)" />
+    <Copy SourceFiles="@(FilesToDeploy)" DestinationFiles="@(FilesToDeploy->'$(SurfaceNetworkFilterOutput)\%(RecursiveDir)%(Filename)%(Extension)')" />
+  </Target>
+
+  <ItemGroup>
+    <Reference Include="Game"><Private>false</Private></Reference>
+    <Reference Include="Newtonsoft.Json"><Private>false</Private></Reference>
+    <Reference Include="Colossal.Core"><Private>false</Private></Reference>
+    <Reference Include="Colossal.Logging"><Private>false</Private></Reference>
+    <Reference Include="Colossal.IO.AssetDatabase"><Private>false</Private></Reference>
+    <Reference Include="Colossal.UI"><Private>false</Private></Reference>
+    <Reference Include="Colossal.UI.Binding"><Private>false</Private></Reference>
+    <Reference Include="Colossal.Localization"><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.CoreModule"><Private>false</Private></Reference>
+    <Reference Include="Unity.Collections"><Private>false</Private></Reference>
+    <Reference Include="Unity.Entities"><Private>false</Private></Reference>
+    <Reference Include="Unity.Mathematics"><Private>false</Private></Reference>
+    <Reference Include="Colossal.Mathematics"><Private>false</Private></Reference>
+  </ItemGroup>
+</Project>

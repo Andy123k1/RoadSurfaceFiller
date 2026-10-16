@@ -1,0 +1,26 @@
+# Build output and IDE state
+bin/
+obj/
+.vs/
+*.user
+*.suo
+*.pubxml.user
+
+# Local CS2/Unity caches, staged binaries, logs and backups
+/Library/
+/artifacts/
+/backups/
+/.tmp/
+/.deploy-staging/
+*.log
+*.dll
+*.pdb
+*.so
+*.bundle
+
+# Local account configuration and environment files
+PDXAccountData.*
+*.credentials.*
+.env
+.env.*
+!.env.example
