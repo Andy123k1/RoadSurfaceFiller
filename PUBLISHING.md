@@ -1,5 +1,7 @@
 # Road Surface Filler: Visual Studio and publishing
 
+Existing PDX Mods listing: [Road Surface Filler](https://mods.paradoxplaza.com/mods/163448/Windows), **ModId 163448**. Use **PublishNewVersion** for code releases and **UpdatePublishedConfiguration** for listing changes, including visibility.
+
 ## Open the existing project
 
 Open **RoadSurfaceFiller.sln** in Visual Studio. It loads the current **SurfaceNetworkFilter.csproj**, displayed as **Road Surface Filler** in Solution Explorer.
@@ -19,7 +21,7 @@ Edit **Properties/PublishConfiguration.xml**. It includes:
 - Four supplied screenshots under **Properties/Screenshots**, in the order selected for the mod page.
 - Mod version **0.5.23** and installed game version **1.6.2f1**.
 - **Private** visibility for an initial listing review.
-- An empty ModId for a first publication.
+- **ModId 163448** for the existing Road Surface Filler listing.
 
 Before releasing, review the description, compatibility version, included screenshots and **Code Mod** tag, and include any source, support or required-mod links. Optional surface packs can be linked in the description. Change AccessLevel to **Public** when the listing is ready for players.
 
@@ -29,14 +31,14 @@ Every referenced thumbnail and screenshot is below 2 MB to fit the publisher's 2
 
 1. Right-click **Road Surface Filler** in Solution Explorer and choose **Publish**.
 2. Select an existing profile under **Properties/PublishProfiles**:
-   - **PublishNewMod** creates the initial PDX Mods entry.
+   - **PublishNewMod** creates a separate new PDX Mods entry; the current project already has its listing.
    - **PublishNewVersion** uploads a new release to an existing entry.
    - **UpdatePublishedConfiguration** updates an existing entry's listing information.
 3. Review **Properties/PublishConfiguration.xml** and the selected profile before starting publication.
 4. Complete any account sign-in requested by the official publisher on your computer.
-5. Retain the ModId returned by the first publication in the configuration. Use that ID with the update profiles for later releases.
+5. Keep **ModId 163448** in the configuration so update profiles target the existing listing.
 
-Selecting **Publish** starts an upload. A normal **Build** does not upload anything. The project setup was prepared locally without invoking publication.
+Selecting **Publish** starts an upload. A normal **Build** does not upload anything.
 
 For subscription checks after publication, keep only one active copy of the mod: the local development copy and subscribed copy share an identity.
 
