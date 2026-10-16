@@ -2,7 +2,7 @@
  * Cities: Skylines II UI Module
  * Id: SurfaceNetworkFilter
  * Author: Road Surface Filler
- * Version: 0.5.25
+ * Version: 0.5.26
  * Dependencies:
  */
 

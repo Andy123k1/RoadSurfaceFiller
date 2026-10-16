@@ -12,9 +12,16 @@ namespace SurfaceNetworkFilter
         // exactly the same endpoints. One unit is 0.1 mm, below native float
         // precision over most of the map. There is no polygon inflation here.
         private const double SurfacePolygonScale = 10000d;
-        private const int SurfacePolygonNodeLimit = 128;
+        private const int SurfacePolygonNodeLimit = 256;
+        private const double SurfacePolygonSeamTolerance = 0.001d;
         private int m_LoggedCompactFootprints, m_LoggedCompactFootprintFailures;
         private int m_CompactFootprintPasses, m_CompactFootprintRegions, m_CompactFootprintFallbacks;
+
+        private sealed class SurfaceMaskContour
+        {
+            internal Path64 Boundary;
+            internal int CellCount;
+        }
 
         private bool TryClipSurfaceFootprint(SurfacePatch source, List<LaneMaskCell> cells,
             out SurfacePatch result, bool intersection = false)
@@ -23,15 +30,12 @@ namespace SurfaceNetworkFilter
             SurfacePatch mesh = source.Parts.Count > 0 ? FlattenSurfacePatchMesh(source) : source;
             if (mesh.Triangles.Count == 0 || mesh.Count < 4) return false;
             Paths64 subjects = new Paths64(), masks = new Paths64();
-            foreach (int3 face in mesh.Triangles)
-                AddSurfacePolygonTriangle(subjects, mesh.Nodes[face.x].m_Position,
-                    mesh.Nodes[face.y].m_Position, mesh.Nodes[face.z].m_Position);
+            AddSurfacePolygonPaths(source, subjects);
             if (subjects.Count == 0) return false;
+            subjects = RepairSurfacePolygonSeams(subjects);
             float3 low = new float3(float.PositiveInfinity), high = new float3(float.NegativeInfinity);
             foreach (var node in mesh.Nodes) { low = math.min(low, node.m_Position); high = math.max(high, node.m_Position); }
-            foreach (LaneMaskCell cell in cells)
-                if (LaneCellOverlaps(low, high, cell))
-                    AddSurfacePolygonTriangle(masks, cell.Points[0], cell.Points[1], cell.Points[2]);
+            AddSurfaceMaskPaths(cells, low, high, masks);
 
             PolyTree64 footprint = new PolyTree64();
             if (!ExecuteSurfacePolygons(subjects, masks,
@@ -58,6 +62,129 @@ namespace SurfaceNetworkFilter
                     "; mask cells=" + cells.Count + "; areas=" + compact.Parts.Count +
                     "; hole/complexity cuts=" + partitions + "; footprint=" + actual.ToString("0.###") + " m2.");
             return true;
+        }
+
+        private static void AddSurfacePolygonPaths(SurfacePatch patch, Paths64 paths)
+        {
+            foreach (SurfacePatch part in patch.Parts) AddSurfacePolygonPaths(part, paths);
+            if (TryGetSurfaceBoundaryPath(patch, out Path64 boundary)) { paths.Add(boundary); return; }
+            foreach (int3 face in patch.Triangles)
+                AddSurfacePolygonTriangle(paths, patch.Nodes[face.x].m_Position,
+                    patch.Nodes[face.y].m_Position, patch.Nodes[face.z].m_Position);
+        }
+
+        private static Paths64 RepairSurfacePolygonSeams(Paths64 subjects)
+        {
+            Paths64 footprint = Clipper.Union(subjects, FillRule.NonZero);
+            if (footprint.Count < 2) return footprint;
+            // Independently clipped mesh cells can disagree at T junctions by
+            // one native float unit. Close only millimetre-scale cracks before
+            // subtracting the original lane/planting masks. Merging previously
+            // clipped plans also preserves every non-numerical original hole.
+            double tolerance = SurfacePolygonSeamTolerance * SurfacePolygonScale;
+            Paths64 repaired = Clipper.InflatePaths(Clipper.InflatePaths(footprint, tolerance,
+                JoinType.Miter, EndType.Polygon), -tolerance, JoinType.Miter, EndType.Polygon);
+            if (repaired.Count == 0) return footprint;
+            Paths64 holes = new Paths64();
+            double perimeter = 0d;
+            foreach (Path64 path in footprint)
+            {
+                for (int i = 0; i < path.Count; i++)
+                {
+                    Point64 a = path[i], b = path[(i + 1) % path.Count];
+                    double x = (double)b.X - a.X, z = (double)b.Y - a.Y;
+                    perimeter += Math.Sqrt(x * x + z * z);
+                }
+                if (Clipper.Area(path) >= 0d || IsNumericalSurfaceHole(path, tolerance)) continue;
+                Path64 hole = new Path64(path); hole.Reverse(); holes.Add(hole);
+            }
+            if (holes.Count > 0) repaired = Clipper.Difference(repaired, holes, FillRule.NonZero);
+            // A numerical repair must stay local. Reject any unexpected large
+            // footprint change and retain the exact original union instead.
+            double changedArea = Math.Abs(Clipper.Area(Clipper.Xor(footprint, repaired, FillRule.NonZero)));
+            return changedArea <= perimeter * tolerance * 2d ? repaired : footprint;
+        }
+
+        private static bool IsNumericalSurfaceHole(Path64 path, double tolerance)
+        {
+            if (path.Count < 3) return true;
+            Point64 minX = path[0], maxX = path[0], minZ = path[0], maxZ = path[0];
+            foreach (Point64 point in path)
+            {
+                if (point.X < minX.X) minX = point; if (point.X > maxX.X) maxX = point;
+                if (point.Y < minZ.Y) minZ = point; if (point.Y > maxZ.Y) maxZ = point;
+            }
+            Point64 a = minX, b = maxX;
+            if ((double)maxZ.Y - minZ.Y > (double)maxX.X - minX.X) { a = minZ; b = maxZ; }
+            double x = (double)b.X - a.X, z = (double)b.Y - a.Y, length = x * x + z * z;
+            if (length <= tolerance * tolerance) return true;
+            foreach (Point64 point in path)
+            {
+                double cross = x * ((double)point.Y - a.Y) - z * ((double)point.X - a.X);
+                if (cross * cross > tolerance * tolerance * length) return false;
+            }
+            return true;
+        }
+
+        private static void AddSurfaceMaskPaths(List<LaneMaskCell> cells, float3 low, float3 high, Paths64 paths)
+        {
+            Dictionary<SurfaceMaskContour, int> selected = new Dictionary<SurfaceMaskContour, int>();
+            foreach (LaneMaskCell cell in cells)
+                if (cell.Contour != null && low.y < cell.Maximum.y + 0.12f && high.y > cell.Minimum.y - 0.12f)
+                {
+                    selected.TryGetValue(cell.Contour, out int count);
+                    selected[cell.Contour] = count + 1;
+                }
+            HashSet<SurfaceMaskContour> emitted = new HashSet<SurfaceMaskContour>();
+            foreach (LaneMaskCell cell in cells)
+            {
+                if (!LaneCellOverlaps(low, high, cell)) continue;
+                // Off-footprint X/Z cells cannot affect the boolean, so they
+                // need not prevent using the complete mask perimeter. Every
+                // cell must still pass the deck-height filter. Partial-height
+                // masks keep their individually filtered triangles.
+                if (cell.Contour != null && selected[cell.Contour] == cell.Contour.CellCount)
+                { if (emitted.Add(cell.Contour)) paths.Add(cell.Contour.Boundary); }
+                else AddSurfacePolygonTriangle(paths, cell.Points[0], cell.Points[1], cell.Points[2]);
+            }
+        }
+
+        private static bool TryGetSurfaceBoundaryPath(SurfacePatch patch, out Path64 boundary)
+        {
+            boundary = null;
+            int count = patch.Count - 1;
+            if (count < 3 || patch.Triangles.Count != count - 2 ||
+                math.distancesq(patch.Nodes[0].m_Position, patch.Nodes[count].m_Position) > 0.00000001f) return false;
+            // A closed node list alone is insufficient: flattened/folded meshes
+            // can contain interior nodes. Prove that the indexed mesh has this
+            // exact perimeter, and that its faces do not overlap or fold.
+            Dictionary<long, int> edges = new Dictionary<long, int>();
+            double trianglesArea = 0d;
+            foreach (int3 face in patch.Triangles)
+            {
+                if (math.any(face < 0) || math.any(face >= count)) return false;
+                for (int i = 0; i < 3; i++)
+                {
+                    long key = SurfaceMeshEdgeKey(face[i], face[(i + 1) % 3]);
+                    edges.TryGetValue(key, out int uses); edges[key] = uses + 1;
+                }
+                trianglesArea += Math.Abs(LaneCellSide(patch.Nodes[face.z].m_Position,
+                    patch.Nodes[face.x].m_Position, patch.Nodes[face.y].m_Position)) * 0.5d;
+            }
+            Path64 path = new Path64(count);
+            for (int i = 0; i < count; i++)
+            {
+                long key = SurfaceMeshEdgeKey(i, (i + 1) % count);
+                if (!edges.TryGetValue(key, out int uses) || uses != 1 || !math.all(math.isfinite(patch.Nodes[i].m_Position))) return false;
+                edges.Remove(key); path.Add(SurfacePolygonPoint(patch.Nodes[i].m_Position));
+            }
+            foreach (int uses in edges.Values) if (uses != 2) return false;
+            double area = Clipper.Area(path);
+            if (Math.Abs(area) <= 1d) return false;
+            if (Math.Abs(Math.Abs(area) / (SurfacePolygonScale * SurfacePolygonScale) - trianglesArea) >
+                Math.Max(0.0001d, trianglesArea * 0.00001d)) return false;
+            if (area < 0d) path.Reverse();
+            boundary = path; return true;
         }
 
         private bool ReportCompactFootprintFailure(SurfacePatch mesh, int masks, string reason)

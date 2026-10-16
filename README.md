@@ -4,6 +4,15 @@ Road Surface Filler creates native surface areas over road pavement and road-ass
 
 Open **RoadSurfaceFiller.sln** to work with the existing project in Visual Studio. The official template's publishing profiles and a draft mod-page configuration are included; see [PUBLISHING.md](PUBLISHING.md).
 
+## Junction compaction follow-up: 0.5.26
+
+- Retain verified mesh perimeters for both paint and complete mask footprints. A topology/area check rejects flattened or folded meshes, which retain triangle union handling. This avoids reconstructing clean boundaries from independent triangles after each clipping step.
+- Repair numerical seams at a 1 mm tolerance before applying the original protection masks. Non-numerical holes in the original footprint are explicitly restored, and unexpected large footprint changes reject the repair. Material bands, islands and lane masks retain their boundaries.
+- Before creating native entities, combine compatible pieces from the complete road plan, including pieces emitted by different junction helpers. Groups require the same prefab, projection limits and boundary flags, plus compatible deck planes within 5 mm. Non-planar patches and different heights stay independent. Each road retains its ownership so preset edits, upgrades and restoration can still rebuild its own surfaces.
+- Merge before applying the native expansion guards, so bevels on internal fragment edges cannot create gaps that prevent joining. Guard the final outside contours and reject a merge if guarding would substantially change its footprint. Accept a replacement only when it uses fewer areas. Logs report **planned areas before merge** and **after merge** in addition to the managed area count.
+- **Rebuild applied surfaces** replaces existing fragments using saved finishes. A roundabout island still requires hole-free partitions, and independently owned roads retain their separate update boundaries.
+- The real-city 0.5.25 log reported 14,979 managed areas and 74 geometry recoveries; the user reported a reduction of about 5,000 areas. The effect of this follow-up requires a new in-game check.
+
 ## Junction surface compaction: 0.5.25
 
 - Junction clipping now combines the source mesh into polygon footprints using bundled Clipper2 integer boolean operations. Internal triangle edges are removed before native areas are created, including roundabout pavement and bus shoulder intersections.

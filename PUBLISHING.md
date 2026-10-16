@@ -19,7 +19,7 @@ Edit **Properties/PublishConfiguration.xml**. It includes:
 - Display name **Road Surface Filler** and a draft description of the current features.
 - The supplied RSF image at **Properties/Thumbnail.png**.
 - Five screenshots under **Properties/Screenshots**: the two UI screenshots followed by the three city screenshots in the supplied order.
-- Mod version **0.5.25** and installed game version **1.6.2f1**.
+- Mod version **0.5.26** and installed game version **1.6.2f1**.
 - **Public** visibility for the released listing.
 - **ModId 163448** for the existing Road Surface Filler listing.
 
@@ -50,8 +50,8 @@ From this folder:
 dotnet build RoadSurfaceFiller.sln -c Release --no-restore -p:SurfaceNetworkFilterStageOnly=true
 ```
 
-This uses the official post-processor and writes the runtime files to `artifacts/v0.5.25`. Normal builds deploy to the local game mod folder, so close the game before using normal deployment. Disable the PDX Mods copy in your active playset before using a local development copy to avoid loading two copies.
+This uses the official post-processor and writes the runtime files to `artifacts/v0.5.26`. Normal builds deploy to the local game mod folder, so close the game before using normal deployment. Disable the PDX Mods copy in your active playset before using a local development copy to avoid loading two copies.
 
-For the 0.5.25 junction optimization, check a copy of a real city before uploading the release. Use **Rebuild applied surfaces** to replace existing fragmented overlays, then compare junction coverage, managed area counts and generation times in the mod log. Include bike/bus separation, shoulder fill, differing segment finishes, planted junctions, sloped roads and roundabouts. Compilation alone does not establish gameplay correctness or a measured performance improvement.
+For the 0.5.26 junction optimization, check a copy of a real city before uploading the release. Use **Rebuild applied surfaces** to replace existing fragmented overlays, then compare junction coverage, managed area counts, generation times and **planned areas before/after merge** in the mod log. Include bike/bus separation, shoulder fill, differing segment finishes, planted junctions, sloped roads and roundabouts. Compilation alone does not establish gameplay correctness or a measured performance improvement.
 
 Official overview: https://www.paradoxinteractive.com/games/cities-skylines-ii/modding/dev-diary-3-code-modding

@@ -11,6 +11,7 @@ namespace SurfaceNetworkFilter
         {
             internal float3[] Points;
             internal float3 Minimum, Maximum;
+            internal SurfaceMaskContour Contour;
         }
 
         private sealed class LaneMaskBorder
@@ -21,6 +22,8 @@ namespace SurfaceNetworkFilter
         private static void AddLaneMaskCells(SurfacePatch patch, List<LaneMaskCell> cells)
         {
             foreach (SurfacePatch part in patch.Parts) AddLaneMaskCells(part, cells);
+            SurfaceMaskContour contour = TryGetSurfaceBoundaryPath(patch, out var boundary)
+                ? new SurfaceMaskContour { Boundary = boundary } : null;
             foreach (int3 triangle in patch.Triangles)
             {
                 float3 a = patch.Nodes[triangle.x].m_Position, b = patch.Nodes[triangle.y].m_Position,
@@ -28,8 +31,9 @@ namespace SurfaceNetworkFilter
                 if (math.abs(Cross2(b.xz - a.xz, c.xz - a.xz)) <= 0.00001f) continue;
                 cells.Add(new LaneMaskCell {
                     Points = Cross2(b.xz - a.xz, c.xz - a.xz) > 0f ? new[] { a, b, c } : new[] { a, c, b },
-                    Minimum = math.min(a, math.min(b, c)), Maximum = math.max(a, math.max(b, c))
+                    Minimum = math.min(a, math.min(b, c)), Maximum = math.max(a, math.max(b, c)), Contour = contour
                 });
+                if (contour != null) contour.CellCount++;
             }
         }
 
@@ -39,7 +43,8 @@ namespace SurfaceNetworkFilter
             if (source.Parts.Count > 0)
             {
                 SurfacePatch combined = FlattenSurfacePatchMesh(source);
-                if (TrySubtractLaneContours(combined, cells, out SurfacePatch joined) ||
+                if (TryClipSurfaceFootprint(source, cells, out SurfacePatch joined) ||
+                    TrySubtractLaneContoursLegacy(combined, cells, out joined) ||
                     TrySweepLaneMasks(combined, cells, out joined)) return joined;
                 SurfacePatch result = CopySurfacePatchProperties(source);
                 foreach (SurfacePatch part in source.Parts)

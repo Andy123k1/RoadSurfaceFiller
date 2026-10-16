@@ -15,8 +15,10 @@ namespace SurfaceNetworkFilter
             internal readonly Entity Prefab;
             internal readonly SurfacePatch Patch;
             internal readonly SurfacePatchStamp Stamp;
+            internal readonly bool Guarded;
             internal Entity ReusedArea;
-            internal PlannedSurfaceArea(Entity prefab, SurfacePatch patch) { Prefab = prefab; Patch = patch; Stamp = GetSurfacePatchStamp(patch); }
+            internal PlannedSurfaceArea(Entity prefab, SurfacePatch patch, bool guarded = false)
+            { Prefab = prefab; Patch = patch; Guarded = guarded; Stamp = GetSurfacePatchStamp(patch); }
         }
 
         private struct SurfacePatchStamp { internal ulong Geometry, Topology; }
@@ -147,6 +149,11 @@ namespace SurfaceNetworkFilter
         private void CommitSurfacePlan(Entity owner)
         {
             m_PlanningSurfaceOwner = Entity.Null;
+            // Generation helpers can independently emit adjoining pieces of
+            // the same paint. Consolidate the complete owner's plan before
+            // matching/creating native entities, preserving ownership on edits.
+            CoalesceSurfacePlan();
+            GuardSurfacePlan(owner);
             List<Entity> previous = m_GeneratedByOwner.TryGetValue(owner, out List<Entity> owned)
                 ? new List<Entity>(owned) : new List<Entity>();
             HashSet<Entity> used = new HashSet<Entity>();
@@ -318,7 +325,9 @@ namespace SurfaceNetworkFilter
                 " ms; longest road=" + m_LongestRoadMilliseconds.ToString("F1") + " ms; unchanged areas=" + m_ReusedSurfaceAreas +
                 "; updated in place=" + m_UpdatedSurfaceAreas + "; new definitions=" + m_NewSurfaceAreas +
                 "; compact footprint passes=" + m_CompactFootprintPasses + "; footprint regions=" + m_CompactFootprintRegions +
-                "; geometry recoveries=" + m_CompactFootprintFallbacks + ".");
+                "; geometry recoveries=" + m_CompactFootprintFallbacks +
+                "; planned areas before merge=" + m_SurfacePlanAreasBeforeMerge +
+                "; after merge=" + m_SurfacePlanAreasAfterMerge + ".");
             ResetSurfaceGenerationCosts();
         }
 
@@ -327,6 +336,7 @@ namespace SurfaceNetworkFilter
             m_PerformanceRoads = m_ReusedSurfaceAreas = m_UpdatedSurfaceAreas = m_NewSurfaceAreas = 0;
             m_GenerationMilliseconds = m_LongestRoadMilliseconds = 0;
             m_CompactFootprintPasses = m_CompactFootprintRegions = m_CompactFootprintFallbacks = 0;
+            m_SurfacePlanAreasBeforeMerge = m_SurfacePlanAreasAfterMerge = 0;
         }
     }
 }

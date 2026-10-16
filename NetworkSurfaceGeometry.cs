@@ -965,19 +965,40 @@ namespace SurfaceNetworkFilter
                 }
                 return;
             }
+            if (polygon.Count < 4 || polygon.Triangles.Count == 0) return;
+            if (m_PlanningSurfaceOwner == owner)
+            {
+                // Do not bevel every internal fragment. Those tiny bevel gaps
+                // prevent otherwise adjoining pieces from joining later.
+                // The complete plan is coalesced before its outside edges are
+                // guarded, immediately before native areas are committed.
+                QueueArea(owner, prefab, polygon);
+                return;
+            }
+            polygon = GuardPlannedSurfacePatch(prefab, polygon);
+            if (polygon.Count >= 4 && polygon.Triangles.Count > 0)
+            {
+                LogFinalPlannedSurface(owner, prefab, polygon);
+                QueueArea(owner, prefab, polygon);
+            }
+        }
+
+        private SurfacePatch GuardPlannedSurfacePatch(Entity prefab, SurfacePatch polygon)
+        {
             if (polygon.SmallRoundabout)
                 polygon = GuardSmallRoundaboutPatch(polygon, GetSurfaceExpansion(prefab));
             else if (polygon.ExactBoundary)
                 polygon = GuardExactSurfacePatch(polygon, GetSurfaceExpansion(prefab));
-            if (polygon.Count >= 4 && polygon.Triangles.Count > 0)
+            return polygon;
+        }
+
+        private void LogFinalPlannedSurface(Entity owner, Entity prefab, SurfacePatch polygon)
+        {
+            LogJunctionPatchCoordinates(owner, prefab, polygon);
+            if (polygon.BevelCount > 0 && !m_LoggedRoundaboutBevels)
             {
-                LogJunctionPatchCoordinates(owner, prefab, polygon);
-                if (polygon.BevelCount > 0 && !m_LoggedRoundaboutBevels)
-                {
-                    Mod.Log.Info("Beveled sharp surface tips to prevent native decal expansion spikes. Corners=" + polygon.BevelCount + ".");
-                    m_LoggedRoundaboutBevels = true;
-                }
-                QueueArea(owner, prefab, polygon);
+                Mod.Log.Info("Beveled sharp surface tips to prevent native decal expansion spikes. Corners=" + polygon.BevelCount + ".");
+                m_LoggedRoundaboutBevels = true;
             }
         }
 
