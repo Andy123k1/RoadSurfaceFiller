@@ -4,6 +4,8 @@ Road Surface Filler creates native surface areas over road pavement and road-ass
 
 Open **RoadSurfaceFiller.sln** to work with the existing project in Visual Studio. The official template's publishing profiles and a draft mod-page configuration are included; see [PUBLISHING.md](PUBLISHING.md).
 
+The **0.5.28** release includes all updates from **0.5.25 through 0.5.28**. See [CHANGELOG.md](CHANGELOG.md) for the combined release notes and the steps to take after updating.
+
 ## Manual surface editing: 0.5.28
 
 - In **Tools**, choose **Make generated surfaces editable**, select road segments and press **Apply changes**. Completed generated areas are detached from road ownership and automatic mesh maintenance. Their shapes, native triangles and surface renderers are retained. Roads still generating areas are skipped with a message so unfinished geometry is not handed over.
