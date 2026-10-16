@@ -18,14 +18,14 @@ Edit **Properties/PublishConfiguration.xml**. It includes:
 
 - Display name **Road Surface Filler** and a draft description of the current features.
 - The supplied RSF image at **Properties/Thumbnail.png**.
-- Four supplied screenshots under **Properties/Screenshots**, in the order selected for the mod page.
+- Five screenshots under **Properties/Screenshots**: the two UI screenshots followed by the three city screenshots in the supplied order.
 - Mod version **0.5.24** and installed game version **1.6.2f1**.
 - **Public** visibility for the released listing.
 - **ModId 163448** for the existing Road Surface Filler listing.
 
 For each release, review the description, compatibility version, included screenshots and **Code Mod** tag, and include any source, support or required-mod links. Optional surface packs can be linked in the description. Keep AccessLevel set to **Public** for the released listing.
 
-Every referenced thumbnail and screenshot is below 2 MB to fit the publisher's 2.1 MB image limit. The two larger screenshots use JPEG upload copies at their original dimensions; their original PNG files remain in the project.
+Every referenced thumbnail and screenshot is below 2 MB to fit the publisher's 2.1 MB image limit. The three city screenshots use JPEG upload copies at their original dimensions; their supplied PNG originals are preserved in local backups.
 
 ## Publish from Visual Studio
 

@@ -41,8 +41,9 @@ Surface appearance depends on the road geometry and the selected surface assets.
   <Thumbnail Value="Properties/Thumbnail.png" />
   <Screenshot Value="Properties/Screenshots/01-general-rules.png" />
   <Screenshot Value="Properties/Screenshots/02-surface-tools.png" />
-  <Screenshot Value="Properties/Screenshots/03-rule-editor-and-roads.jpg" />
-  <Screenshot Value="Properties/Screenshots/04-road-surface-example.jpg" />
+  <Screenshot Value="Properties/Screenshots/03-neighborhood-surfaces.jpg" />
+  <Screenshot Value="Properties/Screenshots/04-tram-junction-surfaces.jpg" />
+  <Screenshot Value="Properties/Screenshots/05-road-junction-surfaces.jpg" />
   <Tag Value="Code Mod" />
   <!-- Add a discussion link with ForumLink Value="https://...". -->
   <ModVersion Value="0.5.24" />
