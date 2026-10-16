@@ -34,11 +34,12 @@ namespace SurfaceNetworkFilter
         { SegmentPresetsJson = JsonConvert.SerializeObject(presets); ApplyAndSave(); }
     }
 
-    internal enum SegmentUpgradeMode { BusShoulders = 1, RestoreVanilla = 2, RemoveBusShoulders = 3 }
+    internal enum SegmentUpgradeMode { BusShoulders = 1, RestoreVanilla = 2, RemoveBusShoulders = 3, MakeEditable = 4, ResumeAutomatic = 5 }
     internal static partial class RuntimeState
     {
         internal static bool UpgradeActive;
         internal static int UpgradeSelectionCount;
+        internal static SegmentUpgradeMode UpgradeMode;
         internal static string UpgradeLabel = "", UpgradeMessage = "";
         internal static readonly List<SegmentUpgradeRequest> UpgradeRequests = new List<SegmentUpgradeRequest>();
         internal sealed class SegmentUpgradeRequest
@@ -55,13 +56,17 @@ namespace SurfaceNetworkFilter
         {
             foreach (RuntimeState.SegmentUpgradeRequest request in RuntimeState.UpgradeRequests)
             {
-                int applied = 0, skipped = 0;
+                int applied = 0, skipped = 0, converted = 0;
                 string reason = "";
                 foreach (Entity edge in request.Edges)
                 {
                     try
                     {
                         if (!IsRoadEdge(edge)) throw new ArgumentException("Some selected roads no longer exist.");
+                        if (request.Mode == SegmentUpgradeMode.MakeEditable)
+                        { converted += MakeRoadSurfacesEditable(edge); applied++; continue; }
+                        if (request.Mode == SegmentUpgradeMode.ResumeAutomatic)
+                        { ResumeAutomaticRoadSurfaces(edge); applied++; continue; }
                         if (request.Mode == SegmentUpgradeMode.RestoreVanilla) RestoreRoadToVanilla(edge);
                         else if (request.Mode == SegmentUpgradeMode.RemoveBusShoulders) RemoveBusShoulderFill(edge);
                         else SaveSegmentRule(edge, CreateBusShoulderUpgrade(edge, request.BusSurface, setting));
@@ -70,10 +75,14 @@ namespace SurfaceNetworkFilter
                     catch (ArgumentException exception) { skipped++; reason = exception.Message; }
                 }
                 if (applied > 0 && !setting.Enabled) { setting.Enabled = true; setting.ApplyAndSave(); }
-                RuntimeState.UpgradeMessage = applied + (request.Mode == SegmentUpgradeMode.RestoreVanilla ? " segments restored to vanilla surfaces." :
+                RuntimeState.UpgradeMessage = request.Mode == SegmentUpgradeMode.MakeEditable
+                    ? converted + " surfaces made editable on " + applied + " segments. Automatic updates are paused on these roads. Use the surface editor to change their boundaries."
+                    : request.Mode == SegmentUpgradeMode.ResumeAutomatic
+                    ? applied + " segments returned to automatic updates. Independent areas are kept; remove them manually if they overlap."
+                    : applied + (request.Mode == SegmentUpgradeMode.RestoreVanilla ? " segments restored to vanilla surfaces." :
                     request.Mode == SegmentUpgradeMode.RemoveBusShoulders ? " segments set to bus-lane shoulders off. Surfaces queued for updating." :
-                    " segments updated. Surfaces queued for updating.") +
-                    (skipped > 0 ? " " + skipped + " skipped. " + reason : "");
+                    " segments updated. Surfaces queued for updating.");
+                if (skipped > 0) RuntimeState.UpgradeMessage += " " + skipped + " skipped. " + reason;
             }
             RuntimeState.UpgradeRequests.Clear();
         }

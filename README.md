@@ -4,6 +4,15 @@ Road Surface Filler creates native surface areas over road pavement and road-ass
 
 Open **RoadSurfaceFiller.sln** to work with the existing project in Visual Studio. The official template's publishing profiles and a draft mod-page configuration are included; see [PUBLISHING.md](PUBLISHING.md).
 
+## Manual surface editing: 0.5.28
+
+- In **Tools**, choose **Make generated surfaces editable**, select road segments and press **Apply changes**. Completed generated areas are detached from road ownership and automatic mesh maintenance. Their shapes, native triangles and surface renderers are retained. Roads still generating areas are skipped with a message so unfinished geometry is not handed over.
+- Automatic painting stays paused on converted roads through rebuilds, rule/preset edits, saving/loading and accepted native splits/replacements. Rules remain saved for later use. The independent areas remain when roads are removed and are excluded from both selected-road and city-wide vanilla restoration.
+- Choose an **Editor surface** and press **Open surface editor** to use the game's native area tool. Drag boundary points or insert points along edges; native editing applies the chosen finish and can also draw new areas. The editor uses the mod's narrow-border rendering variant. Compatible third-party area tools can also work with detached areas, but are not required by this feature.
+- For a whole junction or roundabout, convert every approach: its patches can be owned by several roads. Only areas owned by the selected roads are detached. Neighboring roads continue to manage their own areas.
+- **Resume automatic surfaces** reactivates the selected roads' saved rules. It preserves all independent areas; remove unwanted manual areas yourself before resuming if they would overlap automatic paint. Converted paint still needs this mod and its source surface assets for rendering.
+- Compiled with the official post-processor. Manual editing, save/reload and road-operation behavior still require an in-game check before publication.
+
 ## Roundabout rules and native contour precision: 0.5.27
 
 - Roundabouts connected entirely to highways now use highway categories and exact highway-prefab rules, with a consistent connected-road reference. Rings with street approaches retain street-rule selection. Highway/street inclusion switches, optional highway sidewalks and saved junction choices remain part of that selection.

@@ -27,9 +27,11 @@ namespace SurfaceNetworkFilter
         protected override void OnCreate() { base.OnCreate(); requireNet = Layer.Road | Layer.PublicTransportRoad; }
         internal void Begin(SegmentUpgradeMode mode, string busSurface)
         {
-            ClearSelection(); m_Mode = mode; m_BusSurface = busSurface ?? "";
+            ClearSelection(); m_Mode = mode; RuntimeState.UpgradeMode = mode; m_BusSurface = busSurface ?? "";
             RuntimeState.UpgradeMessage = "";
             RuntimeState.UpgradeLabel = mode == SegmentUpgradeMode.BusShoulders ? "Fill bus-lane shoulders" :
+                mode == SegmentUpgradeMode.MakeEditable ? "Make generated surfaces editable" :
+                mode == SegmentUpgradeMode.ResumeAutomatic ? "Resume automatic surfaces" :
                 mode == SegmentUpgradeMode.RemoveBusShoulders ? "Remove bus-lane shoulder fill" : "Restore vanilla surfaces";
             RuntimeState.UpgradeActive = true; m_ToolSystem.activeTool = this;
         }

@@ -32,6 +32,17 @@ namespace SurfaceNetworkFilter
                 m_Message = "Segment rule deleted. Previously upgraded segments keep their saved surfaces."; Publish();
             }));
             AddBinding(new TriggerBinding<string>(Group, "startUpgrade", StartSegmentUpgrade));
+            AddBinding(new TriggerBinding<string>(Group, "openSurfaceEditor", surface => {
+                if (!IsInLoadedCity()) return;
+                try
+                {
+                    World.GetOrCreateSystemManaged<SurfaceNetworkFilterSystem>().OpenManualSurfaceEditor(surface);
+                    m_Open.Update(false);
+                    RuntimeState.UpgradeMessage = "Surface editor opened. Drag area boundary points to reshape independent surfaces. The chosen finish is used when editing.";
+                }
+                catch (ArgumentException exception) { RuntimeState.UpgradeMessage = exception.Message; }
+                Publish();
+            }));
             AddBinding(new TriggerBinding(Group, "applyUpgrade", () => { UpgradeTool().Commit(); Publish(); }));
             AddBinding(new TriggerBinding(Group, "cancelUpgrade", () => { UpgradeTool().Cancel(); Publish(); }));
             AddBinding(new TriggerBinding(Group, "clearUpgradeSelection", () => { UpgradeTool().ClearSelection(); Publish(); }));

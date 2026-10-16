@@ -262,7 +262,7 @@ namespace SurfaceNetworkFilter
                     assignments = item.Rule.Assignments.Select(target => new { target = (int)target.Target, surface = target.Surface }).ToArray(),
                     available = item.Rule.Assignments.All(target => target.Surface.Length == 0 || RuntimeState.TryGetSurface(target.Surface, out _))
                 }).ToArray(),
-                upgrade = new { active = RuntimeState.UpgradeActive, count = RuntimeState.UpgradeSelectionCount,
+                upgrade = new { active = RuntimeState.UpgradeActive, count = RuntimeState.UpgradeSelectionCount, mode = (int)RuntimeState.UpgradeMode,
                     label = RuntimeState.UpgradeLabel, message = RuntimeState.UpgradeMessage },
                 segmentRuleCount = RuntimeState.SegmentRuleCount,
                 activeSegmentRuleCount = RuntimeState.ActiveSegmentRuleCount,

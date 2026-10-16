@@ -140,7 +140,8 @@ namespace SurfaceNetworkFilter
 
         private bool UsesCityRules(Entity edge) => edge != Entity.Null &&
             (EntityManager.HasComponent<CitySurfaceRuleMember>(edge) || m_CitySurfaceSources.ContainsKey(edge));
-        private bool HasPlacementRules(Entity edge) => UsesCityRules(edge) || m_SegmentRuleRecords.ContainsKey(edge);
+        private bool HasPlacementRules(Entity edge) => !EntityManager.HasComponent<ManualSurfaceRoad>(edge) &&
+            (UsesCityRules(edge) || m_SegmentRuleRecords.ContainsKey(edge));
 
         private Entity FindJunctionRuleRoad(Entity node, Entity prefab, Entity preferred = default)
         {

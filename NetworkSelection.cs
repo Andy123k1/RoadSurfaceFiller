@@ -94,7 +94,7 @@ namespace SurfaceNetworkFilter
 
         private bool PassesSegmentFilter(Entity edge, Entity prefab, Setting setting)
         {
-            if (EntityManager.HasComponent<SurfaceSegmentExcluded>(edge)) return false;
+            if (EntityManager.HasComponent<SurfaceSegmentExcluded>(edge) || EntityManager.HasComponent<ManualSurfaceRoad>(edge)) return false;
             if (setting.Scope == NetworkScope.SelectedSegments && !EntityManager.HasComponent<SurfaceSegmentSelected>(edge)) return false;
             return string.IsNullOrEmpty(setting.RoadPrefabFilter) || string.Equals(setting.RoadPrefabFilter,
                 m_PrefabSystem.GetPrefabName(prefab), StringComparison.OrdinalIgnoreCase);
@@ -185,6 +185,7 @@ namespace SurfaceNetworkFilter
                 RuntimeState.SelectionStatus = name + " — segment " + edge.Index + (IsHighway(edge) ? " (highway)" : " (street)") +
                     "; selected=" + EntityManager.HasComponent<SurfaceSegmentSelected>(edge) +
                     "; excluded=" + EntityManager.HasComponent<SurfaceSegmentExcluded>(edge) +
+                    "; manual surfaces=" + EntityManager.HasComponent<ManualSurfaceRoad>(edge) +
                     ". Saved selection: " + count + " segments.\n" + RuntimeState.SelectionMessage;
             }
         }

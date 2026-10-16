@@ -24,11 +24,15 @@ Give your roads custom pavement, sidewalk, bike-lane and bus-lane finishes using
 - Apply general rules to existing roads with Apply city rules.
 - Cycle the junction finish between connected road and bus-lane surfaces while keeping bike-lane surfaces visible.
 - Fill adjacent paved bus-lane shoulders, or remove that shoulder fill from selected roads.
+- Convert generated surfaces into independent editable areas, with a tool to resume automatic updates later.
 - Restore selected roads or all roads to vanilla surfaces.
 - Manage rules in a movable, resizable panel with collapsible rule cards.
 
 ## Getting started
 Open the RSF button beside the Info button. Create a preset under Segment rules, then select it in the road tool's Surface rule picker. To apply general rules across existing roads, create them under General rules and choose Apply city rules.
+
+## Manual surface editing
+Under Tools, choose Make generated surfaces editable, select roads and press Apply changes once generation has finished. Their areas become independent and automatic updates stop on those roads. Select all approaches to edit a whole junction or roundabout. Choose an Editor surface and Open surface editor to reshape areas with the game's area tool; editing applies the chosen finish. Manual areas survive rebuilds and road changes, including road removal, and are kept by Restore all roads. Resume automatic surfaces reactivates saved rules while keeping manual areas, so remove unwanted overlaps yourself. Keep this mod and the relevant surface assets enabled for these areas to render.
 
 ## Surface packs
 This mod uses available surface assets; it does not include the custom surface packs shown in screenshots. Install the packs containing the finishes you want to use. Those packs may have their own dependencies.
@@ -46,12 +50,12 @@ Surface appearance depends on the road geometry and the selected surface assets.
   <Screenshot Value="Properties/Screenshots/05-road-junction-surfaces.jpg" />
   <Tag Value="Code Mod" />
   <!-- Add a discussion link with ForumLink Value="https://...". -->
-  <ModVersion Value="0.5.27" />
+  <ModVersion Value="0.5.28" />
   <!-- Current locally installed game version; review for each release. -->
   <GameVersion Value="1.6.2f1" />
   <!-- Add Dependency Id="..." only for a required mod. -->
   <!-- Add RequiredDLC Value="..." only when a DLC is required. -->
-  <ChangeLog Value="Fix highway-only roundabouts using street rule context, which could exclude their highway finishes. Keep street rules for rings with street approaches. Normalize clipped contours to native float precision and split positive point-touching lobes locally to reduce triangle fallback fragmentation. Preserve island holes, protection masks and complete-road merging. Rebuild applied surfaces after updating." />
+  <ChangeLog Value="Add Tools actions to convert generated road surfaces into independent editable areas and resume automatic surfaces later. Manual areas are detached from road ownership and automatic mesh repair, remain through rebuilds and road removal, and are kept by vanilla restoration. Converted roads retain their saved manual setting through save/load and accepted native splits/replacements. Open the native surface editor from Tools with a chosen finish. Retain the junction and roundabout compaction improvements." />
   <ExternalLink Type="github" Url="https://github.com/Andy123k1/RoadSurfaceFiller" />
   <AccessLevel Value="Public" />
 </Publish>

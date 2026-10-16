@@ -29,7 +29,7 @@ namespace SurfaceNetworkFilter
         {
             internal Entity Preview, Target, Source;
             internal int Frame;
-            internal bool City, Selected, Excluded, HasLocal;
+            internal bool City, Selected, Excluded, Manual, HasLocal;
             internal SavedSegmentSurfaceRule Local;
             internal List<SavedSegmentSurfaceTarget> Targets;
             internal string PresetId;
@@ -192,8 +192,9 @@ namespace SurfaceNetworkFilter
                 bool hasLocal = TryGetSegmentRule(source, out Entity record, out SavedSegmentSurfaceRule local);
                 RoadStyleCommit commit = new RoadStyleCommit { Preview = preview, Source = source, Target = target, Frame = m_Frame,
                     City = UsesCityRules(source), Selected = EntityManager.HasComponent<SurfaceSegmentSelected>(source),
-                    Excluded = EntityManager.HasComponent<SurfaceSegmentExcluded>(source), HasLocal = hasLocal, Local = local };
-                if (!commit.City && !commit.Selected && !commit.Excluded && !hasLocal) continue;
+                    Excluded = EntityManager.HasComponent<SurfaceSegmentExcluded>(source),
+                    Manual = EntityManager.HasComponent<ManualSurfaceRoad>(source), HasLocal = hasLocal, Local = local };
+                if (!commit.City && !commit.Selected && !commit.Excluded && !commit.Manual && !hasLocal) continue;
                 if (hasLocal)
                 {
                     commit.PresetId = CaptureSegmentPresetId(record);
@@ -209,6 +210,7 @@ namespace SurfaceNetworkFilter
                     if (commit.City && !EntityManager.HasComponent<CitySurfaceRuleMember>(target)) EntityManager.AddComponent<CitySurfaceRuleMember>(target);
                     if (commit.Selected && !EntityManager.HasComponent<SurfaceSegmentSelected>(target)) EntityManager.AddComponent<SurfaceSegmentSelected>(target);
                     if (commit.Excluded && !EntityManager.HasComponent<SurfaceSegmentExcluded>(target)) EntityManager.AddComponent<SurfaceSegmentExcluded>(target);
+                    if (commit.Manual && !EntityManager.HasComponent<ManualSurfaceRoad>(target)) EntityManager.AddComponent<ManualSurfaceRoad>(target);
                     if (commit.HasLocal && !TryGetSegmentRule(target, out _, out _)) RestoreSegmentStyle(target, commit);
                 }
             }
@@ -229,6 +231,7 @@ namespace SurfaceNetworkFilter
                 if (commit.City && !UsesCityRules(target)) EntityManager.AddComponent<CitySurfaceRuleMember>(target);
                 if (commit.Selected && !EntityManager.HasComponent<SurfaceSegmentSelected>(target)) EntityManager.AddComponent<SurfaceSegmentSelected>(target);
                 if (commit.Excluded && !EntityManager.HasComponent<SurfaceSegmentExcluded>(target)) EntityManager.AddComponent<SurfaceSegmentExcluded>(target);
+                if (commit.Manual && !EntityManager.HasComponent<ManualSurfaceRoad>(target)) EntityManager.AddComponent<ManualSurfaceRoad>(target);
                 if (commit.HasLocal && !TryGetSegmentRule(target, out _, out _)) RestoreSegmentStyle(target, commit);
                 QueueRoadStyleRebuild(target);
                 m_RoadStyleCommits.Remove(preview);

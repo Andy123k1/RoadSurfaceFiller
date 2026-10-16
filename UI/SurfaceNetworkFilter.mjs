@@ -2,7 +2,7 @@
  * Cities: Skylines II UI Module
  * Id: SurfaceNetworkFilter
  * Author: Road Surface Filler
- * Version: 0.5.27
+ * Version: 0.5.28
  * Dependencies:
  */
 
@@ -392,6 +392,8 @@ function UpgradeSelection({ upgrade }) {
         h("span", { className: "snf-eyebrow" }, "ROAD TOOL"),
         h("h3", null, upgrade.label),
         h("p", null, "Click or drag over roads to select several segments. Click a selected road again to remove it."),
+        upgrade.mode === 4 && h("p", null, "Generated areas on these roads will become independent. Automatic surface updates stop until you resume them. For a whole junction or roundabout, select every approach; its patches can belong to different roads."),
+        upgrade.mode === 5 && h("p", null, "Automatic updates will resume using the roads' saved rules. Independent areas stay in place; remove any unwanted overlaps yourself."),
         h("div", { className: "snf-selection-count", role: "status" }, upgrade.count + " segments selected"),
         h("div", { className: "snf-tool-buttons" },
             h("button", { type: "button", className: "snf-action", onClick: () => send("cancelUpgrade") }, "Cancel"),
@@ -403,10 +405,26 @@ function UpgradeSelection({ upgrade }) {
 
 function UpgradeTools({ state }) {
     const [busSurface, setBusSurface] = useState("");
+    const [editorSurface, setEditorSurface] = useState("");
     const [confirmRestoreAll, setConfirmRestoreAll] = useState(false);
     const start = mode => send("startUpgrade", JSON.stringify({ mode, busSurface: mode === 1 ? busSurface : "" }));
     return h(ScrollRegion, { className: "snf-tools-scroll" }, h("div", { className: "snf-tools-content" },
         state.upgrade?.message && h("div", { className: "snf-message", role: "status" }, state.upgrade.message),
+        h("section", { className: "snf-tool-card" },
+            h("h3", null, "Edit generated surfaces"),
+            h("p", null, "Convert generated surfaces on selected roads into independent, editable areas. Your manual edits are kept through rebuilds, rule changes and road changes."),
+            h("button", { type: "button", className: "snf-action snf-action-primary", onClick: () => start(4) }, "Make generated surfaces editable"),
+            h("div", { className: "snf-field-hint" }, "Wait for generation to finish, select roads, then Apply changes. To edit a whole junction or roundabout, select all its approaches. Converted areas remain even if the road is removed and are excluded from Restore all roads."),
+            h(Field, { label: "Editor surface", id: "snf-editor-surface" },
+                h(Picker, { id: "snf-editor-surface", value: editorSurface, searchable: true, onChange: setEditorSurface,
+                    items: [{ value: "", label: "Choose a finish for editing" },
+                        ...(state.surfaces || []).map(name => ({ value: name, label: name }))] })),
+            h("button", { type: "button", className: "snf-action", disabled: !editorSurface,
+                onClick: () => send("openSurfaceEditor", editorSurface) }, "Open surface editor"),
+            h("div", { className: "snf-field-hint" }, "Use the game's area tool to drag boundary points or add points along edges. Editing applies the chosen finish. This tool can also draw new areas. Converted areas can also be used with compatible surface-editing tools."),
+            h("div", { className: "snf-shoulder-remove" },
+                h("button", { type: "button", className: "snf-action", onClick: () => start(5) }, "Resume automatic surfaces"),
+                h("div", { className: "snf-field-hint" }, "Select converted roads, then Apply changes. Their saved rules become active again. Independent areas are kept; remove them yourself if they overlap the automatic surfaces."))),
         h("section", { className: "snf-tool-card" },
             h("h3", null, "Fill bus-lane shoulders"),
             h("p", null, "Extend the bus-lane finish across its adjacent paved shoulder. Existing segment adjustments are kept."),
@@ -421,14 +439,14 @@ function UpgradeTools({ state }) {
                 h("div", { className: "snf-field-hint" }, "Select roads, then Apply changes to turn off their shoulder fill, including connections around turns and through junctions. Bus-lane surfaces and other finishes are kept. No surface selection is needed."))),
         h("section", { className: "snf-tool-card" },
             h("h3", null, "Restore vanilla surfaces"),
-            h("p", null, "Remove this mod's city and segment surface finishes from selected road segments."),
+            h("p", null, "Remove automatic city and segment surface finishes from selected road segments. Independent editable areas are kept."),
             h("button", { type: "button", className: "snf-action", onClick: () => start(2) }, "Select segments to restore"),
             h("div", { className: "snf-field-hint" }, "Click or drag to select roads, then Apply changes. They stay vanilla until you apply a preset or Apply city rules again. Connected roads keep their saved finishes."),
             h("div", { className: "snf-restore-all" },
                 h("button", { type: "button", className: "snf-action", disabled: state.restoringAllRoads,
                     onClick: () => setConfirmRestoreAll(!confirmRestoreAll) }, state.restoringAllRoads ? "Restoring all roads…" : "Restore all roads to vanilla"),
                 confirmRestoreAll && !state.restoringAllRoads && h("div", { className: "snf-restore-confirm", role: "group", "aria-label": "Confirm restoring all roads" },
-                    h("p", null, "Restore every road and junction to vanilla? Your saved rules and presets will stay available."),
+                    h("p", null, "Restore every automatically managed road and junction to vanilla? Independent editable areas, saved rules and presets are kept."),
                     h("div", { className: "snf-tool-buttons" },
                         h("button", { type: "button", className: "snf-action", onClick: () => setConfirmRestoreAll(false) }, "Cancel"),
                         h("button", { type: "button", className: "snf-action snf-action-danger",

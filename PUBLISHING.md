@@ -19,7 +19,7 @@ Edit **Properties/PublishConfiguration.xml**. It includes:
 - Display name **Road Surface Filler** and a draft description of the current features.
 - The supplied RSF image at **Properties/Thumbnail.png**.
 - Five screenshots under **Properties/Screenshots**: the two UI screenshots followed by the three city screenshots in the supplied order.
-- Mod version **0.5.27** and installed game version **1.6.2f1**.
+- Mod version **0.5.28** and installed game version **1.6.2f1**.
 - **Public** visibility for the released listing.
 - **ModId 163448** for the existing Road Surface Filler listing.
 
@@ -50,8 +50,10 @@ From this folder:
 dotnet build RoadSurfaceFiller.sln -c Release --no-restore -p:SurfaceNetworkFilterStageOnly=true
 ```
 
-This uses the official post-processor and writes the runtime files to `artifacts/v0.5.27`. Normal builds deploy to the local game mod folder, so close the game before using normal deployment. Disable the PDX Mods copy in your active playset before using a local development copy to avoid loading two copies.
+This uses the official post-processor and writes the runtime files to `artifacts/v0.5.28`. Normal builds deploy to the local game mod folder, so close the game before using normal deployment. Disable the PDX Mods copy in your active playset before using a local development copy to avoid loading two copies.
 
-For the 0.5.27 junction optimization, check a copy of a real city before uploading the release. Use **Rebuild applied surfaces** to replace existing fragmented overlays, then compare junction coverage, managed area counts, generation times and **planned areas before/after merge** in the mod log. Include bike/bus separation, shoulder fill, differing segment finishes, planted junctions, sloped roads, street/mixed roundabouts and highway-only roundabouts. Check highway category and exact-prefab rules and optional highway sidewalks. Compilation alone does not establish gameplay correctness or a measured performance improvement.
+For the junction optimization, check a copy of a real city before uploading the release. Use **Rebuild applied surfaces** to replace existing fragmented overlays, then compare junction coverage, managed area counts, generation times and **planned areas before/after merge** in the mod log. Include bike/bus separation, shoulder fill, differing segment finishes, planted junctions, sloped roads, street/mixed roundabouts and highway-only roundabouts. Check highway category and exact-prefab rules and optional highway sidewalks. Compilation alone does not establish gameplay correctness or a measured performance improvement.
 
 Official overview: https://www.paradoxinteractive.com/games/cities-skylines-ii/modding/dev-diary-3-code-modding
+
+For 0.5.28, use a copy of a city to check Tools > Make generated surfaces editable. Convert a straight segment and all approaches of a junction/roundabout, edit an area boundary with Open surface editor, then rebuild, change rules, split/upgrade/remove a converted road and save/reload. Confirm the edits remain, automatic overlays are not regenerated on converted roads, and neighboring automatic roads still update. Check both vanilla restoration actions preserve independent areas. Resume automatic surfaces and confirm saved rules return while independent areas remain. In-progress roads should be skipped with a clear message. The areas still depend on the mod and their surface assets; gameplay has not been verified by the build.

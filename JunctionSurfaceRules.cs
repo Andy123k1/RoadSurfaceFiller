@@ -127,6 +127,7 @@ namespace SurfaceNetworkFilter
                     part = Mix(Mix(part, prefab.Index), prefab.Version);
                     part = Mix(part, EntityManager.HasComponent<SurfaceSegmentSelected>(edge) ? 1 : 0);
                     part = Mix(part, EntityManager.HasComponent<SurfaceSegmentExcluded>(edge) ? 1 : 0);
+                    part = Mix(part, EntityManager.HasComponent<ManualSurfaceRoad>(edge) ? 1 : 0);
                     Composition composition = EntityManager.GetComponentData<Composition>(edge);
                     part = Mix(part, composition.m_Edge.Index);
                     Edge endpoints = EntityManager.GetComponentData<Edge>(edge);

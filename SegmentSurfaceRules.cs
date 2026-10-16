@@ -228,6 +228,8 @@ namespace SurfaceNetworkFilter
                     RuntimeState.SavedSegmentRuleKey = RuntimeState.SegmentKey(request.Edge);
                     RuntimeState.SegmentRuleMessage = request.Clear ? "Segment restored to general rules." :
                         "Segment rule saved with the city. Its surfaces are queued for updating.";
+                    if (EntityManager.HasComponent<ManualSurfaceRoad>(request.Edge))
+                        RuntimeState.SegmentRuleMessage = "Rule saved. This road's areas are independent; use Tools > Resume automatic surfaces to enable automatic painting again.";
                 }
                 catch (ArgumentException exception) { RuntimeState.SegmentRuleMessage = exception.Message; }
             }
