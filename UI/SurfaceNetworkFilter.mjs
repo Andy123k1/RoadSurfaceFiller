@@ -2,7 +2,8 @@
  * Cities: Skylines II UI Module
  * Id: SurfaceNetworkFilter
  * Author: Road Surface Filler
- * Version: 0.5.23
+ * Version: 0.5.24
+ * Dependencies:
  */
 
 // The game's shared React instance and documented modding hook are used

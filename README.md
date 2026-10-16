@@ -4,6 +4,11 @@ Road Surface Filler creates native surface areas over road pavement and road-ass
 
 Open **RoadSurfaceFiller.sln** to work with the existing project in Visual Studio. The official template's publishing profiles and a draft mod-page configuration are included; see [PUBLISHING.md](PUBLISHING.md).
 
+## UI module registration hotfix: 0.5.24
+
+- Added the UI module's empty `Dependencies:` declaration. The game's asset loader requires this metadata line even when a module has no UI dependencies; omitting it caused `UIModuleAsset.PostCreate` to pass null to `AssetData.AddTags` while registering the published UI file.
+- Update the subscribed mod to 0.5.24 and restart Cities: Skylines II so the corrected UI module is registered.
+
 ## Optional preset updates: 0.5.23
 
 - Segment rule presets have an **Update placed roads when this preset is saved** toggle. When on, saving the preset updates roads using it. When off, each road keeps its applied finish until the preset is reapplied with Replace. Existing presets default to off.
