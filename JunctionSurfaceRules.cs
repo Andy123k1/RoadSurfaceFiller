@@ -83,6 +83,9 @@ namespace SurfaceNetworkFilter
             // inherits the larger road's junction material.
             if (hasAlley && onlyAlleys && highways.Count > 0) streets = highways;
             if (roadCount < 3 && !(hasAlley && (highways.Count > 0 || !onlyAlleys))) return Entity.Null;
+            // Highway-only branches also need one physical reference for the
+            // shared pavement. Keep two-segment material transitions separate.
+            if (streets.Count == 0) streets = highways;
             if (streets.Count == 0) return Entity.Null;
             int best = -1;
             float widest = -1f, bestContinuity = -1f;

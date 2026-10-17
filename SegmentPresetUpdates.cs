@@ -83,7 +83,7 @@ namespace SurfaceNetworkFilter
         {
             SurfaceRule rule = preset.Rule;
             if (saved.Name.ToString() != rule.Name || saved.Enabled != rule.Enabled ||
-                saved.FillBusShoulders != preset.FillBusShoulders ||
+                saved.FillBusShoulders != preset.FillBusShoulders || SegmentRoadPavementMask(record) != RuleRoadPavementMask(rule) ||
                 saved.BikeMode != (rule.SeparateBikeLanes.HasValue ? rule.SeparateBikeLanes.Value ? 2 : 1 : 0) ||
                 saved.BusMode != (rule.SeparateBusLanes.HasValue ? rule.SeparateBusLanes.Value ? 2 : 1 : 0)) return false;
             DynamicBuffer<SavedSegmentSurfaceTarget> targets = EntityManager.GetBuffer<SavedSegmentSurfaceTarget>(record, true);

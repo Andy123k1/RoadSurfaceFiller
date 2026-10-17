@@ -10,6 +10,8 @@ namespace SurfaceNetworkFilter
     {
         public SurfaceTarget Target { get; set; }
         public string Surface { get; set; } = "";
+        public bool UseRoadPavement { get; set; }
+        public bool ShouldSerializeUseRoadPavement() => UseRoadPavement;
     }
 
     internal sealed class SurfaceRule

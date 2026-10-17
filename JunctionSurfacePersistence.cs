@@ -49,6 +49,8 @@ namespace SurfaceNetworkFilter
             m_JunctionSurfaceRecords.Clear(); m_SavedJunctionRecords.Clear();
             m_JunctionReplacementCandidates.Clear(); m_MissingJunctionRecords.Clear();
             m_JunctionRecordsInitialized = false; m_LoggedJunctionRestores = 0;
+            m_JunctionReferenceChecks.Clear(); m_UnresolvedJunctionReferences.Clear();
+            m_LoggedJunctionReferenceRepairs = m_LoggedJunctionReferenceFailures = 0;
         }
 
         private bool IsPermanentRoadNode(Entity node)
@@ -70,7 +72,7 @@ namespace SurfaceNetworkFilter
         private SurfaceChoice GetSavedJunctionChoice(Entity node)
         {
             if (!TryGetSavedJunctionSurface(node, out SavedJunctionSurface saved) ||
-                !EntityManager.Exists(saved.SurfacePrefab)) return null;
+                !IsLoadedJunctionSurface(saved.SurfacePrefab) || m_UnresolvedJunctionReferences.Contains(m_JunctionSurfaceRecords[node])) return null;
             Entity overlay = GetNetworkOverlayPrefab(saved.SurfacePrefab);
             return overlay == Entity.Null ? null : new SurfaceChoice(overlay);
         }
@@ -85,7 +87,7 @@ namespace SurfaceNetworkFilter
                 if (EntityManager.Exists(record))
                 {
                     Entity surface = EntityManager.GetComponentData<SavedJunctionSurface>(record).SurfacePrefab;
-                    if (EntityManager.Exists(surface) && GetNetworkOverlayPrefab(surface) == Entity.Null)
+                    if (!m_UnresolvedJunctionReferences.Contains(record) && IsLoadedJunctionSurface(surface) && GetNetworkOverlayPrefab(surface) == Entity.Null)
                     {
                         RuntimeState.Status = "Preparing saved junction surface renderers.";
                         return false;
@@ -117,6 +119,8 @@ namespace SurfaceNetworkFilter
             // PrefabRef also makes the selected asset visible to native prefab
             // serialization when its supplying road is later removed.
             EntityManager.SetComponentData(record, new PrefabRef { m_Prefab = originalSurface });
+            StoreJunctionSurfaceIdentity(record, originalSurface, roadPrefab);
+            m_JunctionReferenceChecks.Remove(record); m_UnresolvedJunctionReferences.Remove(record);
             if (coverBusLanes && !EntityManager.HasComponent<JunctionPavementCoversBusLanes>(record))
                 EntityManager.AddComponent<JunctionPavementCoversBusLanes>(record);
             else if (!coverBusLanes && EntityManager.HasComponent<JunctionPavementCoversBusLanes>(record))
@@ -137,6 +141,7 @@ namespace SurfaceNetworkFilter
             foreach (Entity candidate in new List<Entity>(m_JunctionReplacementCandidates.Keys))
                 if (m_JunctionReplacementCandidates[candidate] == record) m_JunctionReplacementCandidates.Remove(candidate);
             m_SavedJunctionRecords.Remove(record); m_MissingJunctionRecords.Remove(record);
+            m_JunctionReferenceChecks.Remove(record); m_UnresolvedJunctionReferences.Remove(record);
             if (EntityManager.Exists(record)) EntityManager.DestroyEntity(record);
         }
 
@@ -209,13 +214,15 @@ namespace SurfaceNetworkFilter
                     QueueJunctionRebuild(node);
                     if (m_LoggedJunctionRestores++ < 8)
                         Mod.Log.Info("Retained saved junction pavement after road edit: original node=" + previous.Index +
-                            "; replacement node=" + node.Index + "; surface='" + m_PrefabSystem.GetPrefabName(saved.SurfacePrefab) + "'.");
+                            "; replacement node=" + node.Index + "; surface='" + JunctionPrefabName(saved.SurfacePrefab) + "'.");
                 }
-                if (math.any(saved.Position != position) || EntityManager.GetComponentData<SavedJunctionSurface>(record).Node != node)
+                bool repaired = RecoverSavedJunctionReferences(record, ref saved);
+                if (repaired || math.any(saved.Position != position) || EntityManager.GetComponentData<SavedJunctionSurface>(record).Node != node)
                 {
                     saved.Position = position;
                     EntityManager.SetComponentData(record, saved);
                 }
+                if (repaired) QueueJunctionRebuild(node);
             }
 
             // Upgrade the earlier node/edge-only preferences without changing

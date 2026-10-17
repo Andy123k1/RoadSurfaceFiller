@@ -66,7 +66,7 @@ namespace SurfaceNetworkFilter
                 domain.Mouths[edge] = JunctionCrosswalkCut(edge, node, start);
                 Entity prefab = EntityManager.GetComponentData<PrefabRef>(edge).m_Prefab;
                 Setting setting = Mod.ActiveSetting;
-                if (setting != null && PassesSegmentFilter(edge, prefab, setting) && PassesRoadFilter(edge, prefab, setting) &&
+                if (setting != null && HasPlacementRules(edge) && PassesSegmentFilter(edge, prefab, setting) && PassesRoadFilter(edge, prefab, setting) &&
                     PassesElevationFilter(edge, prefab, setting) && (domain.Owner == Entity.Null || edge.Index < domain.Owner.Index)) domain.Owner = edge;
             }
             if (outlines.Count < 3 || domain.Owner == Entity.Null) return null;
@@ -114,9 +114,22 @@ namespace SurfaceNetworkFilter
             Curve curve = EntityManager.GetComponentData<Curve>(edge);
             float2 direction = math.normalizesafe((start ? MathUtils.StartTangent(curve.m_Bezier) : -MathUtils.EndTangent(curve.m_Bezier)).xz);
             EdgeGeometry geometry = EntityManager.GetComponentData<EdgeGeometry>(edge);
-            float3 mouth = start ? (geometry.m_Start.m_Left.a + geometry.m_Start.m_Right.a) * 0.5f :
-                (geometry.m_End.m_Left.d + geometry.m_End.m_Right.d) * 0.5f;
-            CurbCut result = new CurbCut { Normal = direction, Distance = math.dot(direction, mouth.xz) };
+            float3 mouthLeft = start ? geometry.m_Start.m_Left.a : geometry.m_End.m_Left.d;
+            float3 mouthRight = start ? geometry.m_Start.m_Right.a : geometry.m_End.m_Right.d;
+            float3 mouth = (mouthLeft + mouthRight) * 0.5f;
+            // Without a crosswalk, ownership changes at the native mesh mouth.
+            // Acute highway merges have an oblique mouth, so a tangent-normal
+            // plane cuts a triangle off the road body outside the junction's
+            // footprint. Both native mouth endpoints must lie on this plane.
+            float2 mouthAxis = math.normalizesafe(mouthRight.xz - mouthLeft.xz);
+            float2 mouthNormal = new float2(-mouthAxis.y, mouthAxis.x);
+            if (math.lengthsq(mouthNormal) < 0.5f) mouthNormal = direction;
+            float3 body = start ? (geometry.m_Start.m_Left.b + geometry.m_Start.m_Right.b) * 0.5f :
+                (geometry.m_End.m_Left.c + geometry.m_End.m_Right.c) * 0.5f;
+            float outward = math.dot(mouthNormal, body.xz - mouth.xz);
+            if (math.abs(outward) < 0.0001f) outward = math.dot(mouthNormal, direction);
+            if (outward < 0f) mouthNormal = -mouthNormal;
+            CurbCut result = new CurbCut { Normal = mouthNormal, Distance = math.dot(mouthNormal, mouth.xz) };
             float best = float.PositiveInfinity;
             if (!EntityManager.HasBuffer<SubLane>(node)) return result;
             foreach (SubLane connected in EntityManager.GetBuffer<SubLane>(node, true))

@@ -22,6 +22,7 @@ namespace SurfaceNetworkFilter
     {
         private static readonly List<string> s_SurfaceNames = new List<string>();
         private static readonly Dictionary<string, Entity> s_SurfaceEntities = new Dictionary<string, Entity>(StringComparer.OrdinalIgnoreCase);
+        internal static readonly Dictionary<string, string> SurfacePreviews = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         internal static bool RebuildRequested;
         internal static bool SurfaceRefreshRequested;
@@ -53,12 +54,17 @@ namespace SurfaceNetworkFilter
             return s_SurfaceEntities.TryGetValue(name, out entity);
         }
 
-        internal static bool ReplaceSurfaceCatalog(Dictionary<string, Entity> catalog)
+        internal static IEnumerable<string> GetInstalledSurfaceNames() => s_SurfaceEntities.Keys;
+
+        internal static bool IsSelectableSurface(string name) => !string.IsNullOrEmpty(name) &&
+            s_SurfaceNames.BinarySearch(name, StringComparer.OrdinalIgnoreCase) >= 0;
+
+        internal static bool ReplaceSurfaceCatalog(Dictionary<string, Entity> catalog, HashSet<string> roadSurfaces)
         {
-            bool namesChanged = s_SurfaceNames.Count != catalog.Count;
+            bool namesChanged = s_SurfaceEntities.Count != catalog.Count || s_SurfaceNames.Count != roadSurfaces.Count;
             if (!namesChanged)
             {
-                foreach (string existingName in s_SurfaceNames)
+                foreach (string existingName in s_SurfaceEntities.Keys)
                 {
                     if (!catalog.ContainsKey(existingName))
                     {
@@ -66,6 +72,8 @@ namespace SurfaceNetworkFilter
                         break;
                     }
                 }
+                foreach (string existingName in s_SurfaceNames)
+                    if (!roadSurfaces.Contains(existingName)) { namesChanged = true; break; }
             }
 
             s_SurfaceEntities.Clear();
@@ -75,7 +83,9 @@ namespace SurfaceNetworkFilter
                 if (string.IsNullOrEmpty(entry.Key))
                     continue;
                 s_SurfaceEntities[entry.Key] = entry.Value;
-                s_SurfaceNames.Add(entry.Key);
+                // Keep every installed asset resolvable for old rules and saves.
+                // Only surfaces whose renderer can affect roads are offered anew.
+                if (roadSurfaces.Contains(entry.Key)) s_SurfaceNames.Add(entry.Key);
             }
             s_SurfaceNames.Sort(StringComparer.OrdinalIgnoreCase);
             return namesChanged;
@@ -126,6 +136,7 @@ namespace SurfaceNetworkFilter
         private bool m_BaselineCaptured;
         private bool m_AreaIndexInitialized;
         private bool m_CatalogInitialized;
+        private readonly HashSet<string> m_FailedSurfacePreviews = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private int m_Frame;
         private string m_LastFingerprint;
         private int m_GeneratedCount;
@@ -250,6 +261,11 @@ namespace SurfaceNetworkFilter
             RuntimeState.SelectedJunction = Entity.Null; RuntimeState.JunctionRequests.Clear(); RuntimeState.JunctionMessage = "";
             RuntimeState.JunctionStatus = "Select a road near the junction you want to change.";
             RuntimeState.JunctionEditor = new JunctionEditorState();
+            RuntimeState.JunctionCycleActive = false;
+            RuntimeState.JunctionRestoreAutomatic = false;
+            RuntimeState.ManualSurfaceEditorActive = false;
+            RuntimeState.ManualSurfaceEditorMessage = "";
+            RuntimeState.JunctionCycleTarget = Entity.Null;
             RuntimeState.LastRoadSelectionPosition = default;
             RuntimeState.SelectionStatus = "Select a road segment in the city first.";
             RuntimeState.Status = "Reading the loaded city.";
@@ -323,30 +339,62 @@ namespace SurfaceNetworkFilter
         private void RefreshSurfaceCatalog()
         {
             Dictionary<string, Entity> catalog = new Dictionary<string, Entity>(StringComparer.OrdinalIgnoreCase);
+            HashSet<string> roadSurfaces = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            Game.UI.ImageSystem images = World.GetOrCreateSystemManaged<Game.UI.ImageSystem>();
+            RuntimeState.SurfacePreviews.Clear();
             using (NativeArray<Entity> entities = m_SurfacePrefabs.ToEntityArray(Allocator.Temp))
             {
                 for (int i = 0; i < entities.Length; i++)
                 {
                     Entity entity = entities[i];
                     string name = m_PrefabSystem.GetPrefabName(entity);
-                    if (!string.IsNullOrEmpty(name) && !IsNetworkOverlayPrefab(name) && !catalog.ContainsKey(name))
-                        catalog.Add(name, entity);
+                    if (string.IsNullOrEmpty(name) || IsNetworkOverlayPrefab(name) || catalog.ContainsKey(name)) continue;
+                    catalog.Add(name, entity);
+                    if (CanRenderSurfaceOnRoads(entity))
+                    {
+                        roadSurfaces.Add(name);
+                        RuntimeState.SurfacePreviews[name] = GetSurfacePreview(images, entity, name);
+                    }
                 }
             }
             int oldCount = RuntimeState.GetSurfaceCount();
             bool roadNamesChanged = RefreshRoadCatalog();
-            bool surfaceNamesChanged = RuntimeState.ReplaceSurfaceCatalog(catalog);
+            bool surfaceNamesChanged = RuntimeState.ReplaceSurfaceCatalog(catalog, roadSurfaces);
+            m_JunctionReferenceChecks.Clear();
             if (surfaceNamesChanged) RuntimeState.NotifySegmentPresetsChanged();
             if (surfaceNamesChanged || roadNamesChanged)
             {
                 Mod.RefreshOptionsUI();
-                Mod.Log.Info("Updated surface dropdown choices after catalog changed (" + catalog.Count + " surface(s)).");
+                Mod.Log.Info("Updated surface dropdown choices: " + roadSurfaces.Count + " road-compatible surface(s), " +
+                    (catalog.Count - roadSurfaces.Count) + " surface(s) without road rendering support filtered out.");
             }
             if (catalog.Count == 0 && (!m_CatalogInitialized || oldCount != 0))
                 Mod.Log.Warn("No SurfacePrefab entries were found in the loaded game world.");
-            else if (catalog.Count != oldCount)
-                Mod.Log.Info("Loaded surface catalog contains " + catalog.Count + " surface(s).");
+            else if (roadSurfaces.Count != oldCount)
+                Mod.Log.Info("Loaded surface catalog contains " + roadSurfaces.Count + " road-compatible surface(s).");
             m_CatalogInitialized = true;
+        }
+
+        private bool CanRenderSurfaceOnRoads(Entity prefab)
+        {
+            // The native area batch renderer passes this mask to its material,
+            // including custom materials. Terrain-only surfaces cannot affect
+            // road receivers. Names, UI visibility and provider are irrelevant.
+            return m_PrefabSystem.TryGetPrefab(prefab, out SurfacePrefab surface) &&
+                surface.TryGet(out RenderedArea renderer) && (renderer.m_DecalLayerMask & DecalLayers.Roads) != 0;
+        }
+
+        private string GetSurfacePreview(Game.UI.ImageSystem images, Entity prefab, string name)
+        {
+            try { return images.GetThumbnail(prefab) ?? ""; }
+            catch (Exception exception)
+            {
+                // A provider's missing/malformed thumbnail must never remove a
+                // usable material or stop road generation. Refresh retries it.
+                if (m_FailedSurfacePreviews.Add(name))
+                    Mod.Log.Warn("Surface preview unavailable for '" + name + "': " + exception.Message);
+                return "";
+            }
         }
 
         private void InitializeAreaIndex()
@@ -615,6 +663,12 @@ namespace SurfaceNetworkFilter
 
         private void QueueEdge(Entity edge)
         {
+            QueueEdgeCore(edge);
+            if (IsRoadEdge(edge) && HasPlacementRules(edge)) QueueAutomaticJunctionApproaches(edge);
+        }
+
+        private void QueueEdgeCore(Entity edge)
+        {
             InvalidateGenerationCaches();
             // Do not rebuild the same road while the game is still materializing its
             // previous area definitions. Keep an explicit retry only when another event
@@ -807,6 +861,7 @@ namespace SurfaceNetworkFilter
             List<SurfaceChoice> choices = new List<SurfaceChoice>();
             if (segment == Entity.Null) return choices;
             int highestPriority = -1;
+            bool originalAtHighestPriority = false;
             bool lane = target == SurfaceTarget.BikeLanes || target == SurfaceTarget.BusLanes;
             int lanePriority = -1;
             bool legacyFallback = false;
@@ -829,16 +884,36 @@ namespace SurfaceNetworkFilter
                     continue;
                 SurfaceRule rule = setting.GetRule(slot);
                 if (!rule.TargetActive(target)) continue;
-                string name = rule.SurfaceFor(target);
-                if (string.IsNullOrEmpty(name)) continue;
+                SurfaceAssignment assignment = rule.Assignments?.Find(item => item.Target == target);
+                if (assignment == null) continue;
+                string name = assignment.Surface;
                 if (!RuleMatchesRoadContext(setting, slot, roadPrefab, streetContext)) continue;
                 int priority = RulePriority(rule);
                 if (lane && !legacyFallback && priority != lanePriority) continue;
                 if (priority < highestPriority) continue;
+                if (priority > highestPriority)
+                {
+                    choices.Clear(); highestPriority = priority; originalAtHighestPriority = false;
+                }
+                if (assignment.UseRoadPavement && CanUseRoadPavement(target))
+                {
+                    if (originalAtHighestPriority) continue;
+                    SurfaceChoice road = GetRoadPavementChoice(setting, segment);
+                    if (road != null) choices.Add(road);
+                    else { choices.Clear(); originalAtHighestPriority = true; }
+                    continue;
+                }
+                // Explicit Original finish is an assignment, not an absent
+                // target. It blocks lower-priority finishes and wins ties so
+                // overlapping rules cannot paint over a protected original.
+                if (string.IsNullOrEmpty(name))
+                {
+                    choices.Clear(); originalAtHighestPriority = true; continue;
+                }
+                if (originalAtHighestPriority) continue;
                 Entity prefab;
                 if (RuntimeState.TryGetSurface(name, out prefab) && EntityManager.Exists(prefab))
                 {
-                    if (priority > highestPriority) { choices.Clear(); highestPriority = priority; }
                     LogSurfaceRenderer(prefab, name);
                     Entity overlay = GetNetworkOverlayPrefab(prefab);
                     if (overlay != Entity.Null) choices.Add(new SurfaceChoice(overlay,
@@ -1183,7 +1258,9 @@ namespace SurfaceNetworkFilter
                 Entity edge = ready[i];
                 m_DeferredEdges.Remove(edge);
                 if (EntityManager.Exists(edge) && IsRoadEdge(edge))
-                    QueueEdge(edge);
+                    // Neighbors were queued with the original request. A
+                    // pending owner's retry must not propagate more retries.
+                    QueueEdgeCore(edge);
             }
         }
 
@@ -1307,7 +1384,7 @@ namespace SurfaceNetworkFilter
         {
             if (RuntimeState.GetSurfaceCount() == 0)
             {
-                RuntimeState.Status = "No installed SurfacePrefab entries found. Enable the surface provider, then refresh the surface list.";
+                RuntimeState.Status = "No road-compatible surfaces found. Enable a surface pack that supports roads, then refresh the surface list.";
                 return;
             }
 
@@ -1334,7 +1411,7 @@ namespace SurfaceNetworkFilter
             string state = setting.Enabled ? "Enabled" : "Disabled";
             string mode = "explicit city apply; " + RuntimeState.CityRuleMemberCount + " city roads";
             RuntimeState.Status = state + "; " + mode + "; " + RuntimeState.GetSurfaceCount() +
-                " surfaces available; " + math.max(0, m_EdgeQueue.Count - m_QueueCursor) + " road segments queued; " +
+                " road-compatible surfaces available; " + math.max(0, m_EdgeQueue.Count - m_QueueCursor) + " road segments queued; " +
                 m_GeneratedCount + " generated areas; " + m_PendingAreas.Count + " areas pending; " +
                 m_FailedAreaCount + " timed out.";
         }

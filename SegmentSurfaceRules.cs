@@ -39,6 +39,15 @@ namespace SurfaceNetworkFilter
         { reader.Read(out int target); Target = (SurfaceTarget)target; reader.Read(out Surface); reader.Read(out string name); SurfaceName = new FixedString4096Bytes(name); }
     }
 
+    // Additive metadata keeps the existing saved rule and target-buffer
+    // layouts intact. The bitset marks targets linked to road pavement.
+    public struct SavedSegmentRoadPavementTargets : IComponentData, ISerializable
+    {
+        public int Mask;
+        public void Serialize<TWriter>(TWriter writer) where TWriter : IWriter => writer.Write(Mask);
+        public void Deserialize<TReader>(TReader reader) where TReader : IReader => reader.Read(out Mask);
+    }
+
     internal sealed class SegmentRuleDraft
     {
         public string Key { get; set; } = "";
@@ -121,6 +130,12 @@ namespace SurfaceNetworkFilter
         {
             choices = new List<SurfaceChoice>();
             if (!TryGetSegmentRule(edge, out Entity record, out SavedSegmentSurfaceRule saved) || !saved.Enabled) return false;
+            if (SegmentUsesRoadPavement(record, target))
+            {
+                SurfaceChoice road = GetRoadPavementChoice(Mod.ActiveSetting, edge);
+                if (road != null) choices.Add(road);
+                return true;
+            }
             foreach (SavedSegmentSurfaceTarget item in EntityManager.GetBuffer<SavedSegmentSurfaceTarget>(record, true))
             {
                 if (item.Target != target) continue;
@@ -137,11 +152,51 @@ namespace SurfaceNetworkFilter
             return false;
         }
 
+        private static bool CanUseRoadPavement(SurfaceTarget target) => target == SurfaceTarget.Sidewalks ||
+            target == SurfaceTarget.BikeLanes || target == SurfaceTarget.BusLanes;
+
+        private int SegmentRoadPavementMask(Entity record) => EntityManager.HasComponent<SavedSegmentRoadPavementTargets>(record) ?
+            EntityManager.GetComponentData<SavedSegmentRoadPavementTargets>(record).Mask : 0;
+
+        private bool SegmentUsesRoadPavement(Entity record, SurfaceTarget target) => CanUseRoadPavement(target) &&
+            (SegmentRoadPavementMask(record) & (1 << (int)target)) != 0;
+
+        private static int RuleRoadPavementMask(SurfaceRule rule)
+        {
+            int mask = 0;
+            foreach (SurfaceAssignment item in rule.Assignments)
+                if (item.UseRoadPavement && CanUseRoadPavement(item.Target)) mask |= 1 << (int)item.Target;
+            return mask;
+        }
+
+        private void SetSegmentRoadPavementMask(Entity record, int mask)
+        {
+            if (mask != 0)
+            {
+                SavedSegmentRoadPavementTargets data = new SavedSegmentRoadPavementTargets { Mask = mask };
+                if (EntityManager.HasComponent<SavedSegmentRoadPavementTargets>(record)) EntityManager.SetComponentData(record, data);
+                else EntityManager.AddComponentData(record, data);
+            }
+            else if (EntityManager.HasComponent<SavedSegmentRoadPavementTargets>(record))
+                EntityManager.RemoveComponent<SavedSegmentRoadPavementTargets>(record);
+        }
+
+        private SurfaceChoice GetRoadPavementChoice(Setting setting, Entity edge)
+        {
+            if (setting == null || !IsRoadEdge(edge)) return null;
+            Entity prefab = EntityManager.GetComponentData<PrefabRef>(edge).m_Prefab;
+            // Use the road's actual choice and band seed, including its local
+            // override. Lane/sidewalk seeds must not pick a different variant.
+            return Choose(GetChoices(setting, SurfaceTarget.Roads, prefab, segment: edge),
+                m_PrefabSystem.GetPrefabName(prefab), EntityManager.GetComponentData<Curve>(edge), 0);
+        }
+
         private int MixSegmentRule(int hash, Entity edge)
         {
             if (!TryGetSegmentRule(edge, out Entity record, out SavedSegmentSurfaceRule saved)) return hash;
             hash = Mix(hash, saved.Enabled ? 1 : 0); hash = Mix(hash, saved.BikeMode); hash = Mix(hash, saved.BusMode);
             hash = Mix(hash, saved.FillBusShoulders ? 1 : 0);
+            hash = Mix(hash, SegmentRoadPavementMask(record));
             foreach (SavedSegmentSurfaceTarget item in EntityManager.GetBuffer<SavedSegmentSurfaceTarget>(record, true))
             { hash = Mix(hash, (int)item.Target); hash = Mix(hash, item.SurfaceName.GetHashCode()); }
             return hash;
@@ -250,6 +305,7 @@ namespace SurfaceNetworkFilter
             EntityManager.SetComponentData(record, EntityManager.GetComponentData<PrefabRef>(edge));
             DynamicBuffer<SavedSegmentSurfaceTarget> targets = EntityManager.AddBuffer<SavedSegmentSurfaceTarget>(record);
             foreach (SavedSegmentSurfaceTarget item in EntityManager.GetBuffer<SavedSegmentSurfaceTarget>(source, true)) targets.Add(item);
+            SetSegmentRoadPavementMask(record, SegmentRoadPavementMask(source));
             SetSegmentPresetLink(record, CaptureSegmentPresetId(source));
             QueueSegmentPresetRefresh(record);
             m_SegmentRuleRecords[edge] = record; QueueManualEdge(edge);
@@ -279,6 +335,7 @@ namespace SurfaceNetworkFilter
             });
             DynamicBuffer<SavedSegmentSurfaceTarget> buffer = EntityManager.GetBuffer<SavedSegmentSurfaceTarget>(record);
             buffer.Clear(); foreach (SavedSegmentSurfaceTarget target in targets) buffer.Add(target);
+            SetSegmentRoadPavementMask(record, RuleRoadPavementMask(rule));
             EntityManager.SetComponentData(record, new PrefabRef { m_Prefab = EntityManager.GetComponentData<PrefabRef>(edge).m_Prefab });
             SetSegmentPresetLink(record, draft.PresetId ?? "");
             QueueSegmentPresetRefresh(record);
@@ -308,7 +365,8 @@ namespace SurfaceNetworkFilter
                 Assignments = new List<SurfaceAssignment>(), SeparateBikeLanes = saved.BikeMode == 0 ? (bool?)null : saved.BikeMode == 2,
                 SeparateBusLanes = saved.BusMode == 0 ? (bool?)null : saved.BusMode == 2 };
             foreach (SavedSegmentSurfaceTarget target in EntityManager.GetBuffer<SavedSegmentSurfaceTarget>(record, true))
-                rule.Assignments.Add(new SurfaceAssignment { Target = target.Target, Surface = target.SurfaceName.ToString() });
+                rule.Assignments.Add(new SurfaceAssignment { Target = target.Target, Surface = target.SurfaceName.ToString(),
+                    UseRoadPavement = SegmentUsesRoadPavement(record, target.Target) });
             RuntimeState.SegmentRule = rule; RuntimeState.SegmentFillBusShoulders = saved.FillBusShoulders;
         }
 

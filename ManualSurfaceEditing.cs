@@ -14,23 +14,42 @@ namespace SurfaceNetworkFilter
     // Separate from selection/exclusion: applying city rules or a new preset
     // must not silently resume automatic painting over a player's manual work.
     public struct ManualSurfaceRoad : IComponentData, IEmptySerializable { }
+    public struct EditableGeneratedSurface : IComponentData, IEmptySerializable { }
 
     internal sealed partial class SurfaceNetworkFilterSystem
     {
-        internal void OpenManualSurfaceEditor(string surface)
+        internal void OpenManualSurfaceEditor()
         {
-            if (!RuntimeState.TryGetSurface(surface, out Entity source) || !EntityManager.Exists(source))
-                throw new ArgumentException("Choose an installed surface for the editor.");
-            Entity prefab = GetNetworkOverlayPrefab(source);
-            if (prefab == Entity.Null || !m_PrefabSystem.TryGetPrefab(prefab, out SurfacePrefab paint))
-                throw new ArgumentException("The surface renderer is still preparing. Try again shortly.");
-            if ((EntityManager.GetComponentData<AreaGeometryData>(prefab).m_Flags & GeometryFlags.HiddenIngame) != 0)
-                throw new ArgumentException("This surface does not support the in-game area editor. Choose another surface.");
+            SurfacePrefab paint = null;
+            // Recognize older detached overlays too. These have no native road
+            // owner and use this mod's private overlay prefab namespace.
+            using (Unity.Collections.NativeArray<Entity> areas = GetEntityQuery(ComponentType.ReadOnly<Area>(),
+                ComponentType.ReadOnly<PrefabRef>(), ComponentType.ReadOnly<Node>(), ComponentType.Exclude<Owner>(),
+                ComponentType.Exclude<GeneratedSurface>(), ComponentType.Exclude<Deleted>(),
+                ComponentType.Exclude<Temp>()).ToEntityArray(Unity.Collections.Allocator.Temp))
+                foreach (Entity area in areas)
+                {
+                    Entity prefab = EntityManager.GetComponentData<PrefabRef>(area).m_Prefab;
+                    if (!EntityManager.HasComponent<EditableGeneratedSurface>(area))
+                    {
+                        if (!IsNetworkOverlayPrefab(JunctionPrefabName(prefab))) continue;
+                        EntityManager.AddComponent<EditableGeneratedSurface>(area);
+                    }
+                    if (paint == null && EntityManager.HasComponent<AreaGeometryData>(prefab) &&
+                        (EntityManager.GetComponentData<AreaGeometryData>(prefab).m_Flags & GeometryFlags.HiddenIngame) == 0 &&
+                        m_PrefabSystem.TryGetPrefab(prefab, out SurfacePrefab candidate)) paint = candidate;
+                }
+            if (paint == null) throw new ArgumentException("No converted surface is ready for editing. Wait for generation to finish and select the road again.");
             AreaToolSystem editor = World.GetOrCreateSystemManaged<AreaToolSystem>();
             editor.mode = AreaToolSystem.Mode.Edit;
             editor.recreate = Entity.Null;
+            RuntimeState.ManualSurfaceEditorActive = true;
+            RuntimeState.ManualSurfaceEditorMessage = "Drag surface boundary points or add points along edges. Each surface keeps its existing finish.";
             if (!World.GetOrCreateSystemManaged<ToolSystem>().ActivatePrefabTool(paint))
+            {
+                RuntimeState.ManualSurfaceEditorActive = false;
                 throw new ArgumentException("The surface editor is unavailable right now.");
+            }
         }
 
         private int MakeRoadSurfacesEditable(Entity edge)
@@ -54,11 +73,17 @@ namespace SurfaceNetworkFilter
             // Validate the whole road before handing anything over. A pending
             // native preview must finish before its geometry can be preserved.
             foreach (Entity area in areas)
+            {
                 if (EntityManager.HasComponent<Temp>(area) || EntityManager.HasComponent<Hidden>(area) ||
                     !EntityManager.HasComponent<Area>(area) || !EntityManager.HasBuffer<Node>(area) ||
                     !EntityManager.HasBuffer<Triangle>(area) || EntityManager.GetBuffer<Triangle>(area, true).Length == 0 ||
                     (EntityManager.GetComponentData<Area>(area).m_Flags & (AreaFlags.Complete | AreaFlags.NoTriangles)) != AreaFlags.Complete)
                     throw new ArgumentException("Some surfaces are still updating. Wait for generation to finish, then try again.");
+                Entity prefab = EntityManager.GetComponentData<PrefabRef>(area).m_Prefab;
+                if (!EntityManager.HasComponent<AreaGeometryData>(prefab) ||
+                    (EntityManager.GetComponentData<AreaGeometryData>(prefab).m_Flags & GeometryFlags.HiddenIngame) != 0)
+                    throw new ArgumentException("A surface on this road does not support the game's area editor.");
+            }
 
             SetManualSurfaceRoad(edge, true);
             // Native road cleanup also follows SubArea references. Remove both
@@ -71,6 +96,7 @@ namespace SurfaceNetworkFilter
             }
             foreach (Entity area in areas)
             {
+                if (!EntityManager.HasComponent<EditableGeneratedSurface>(area)) EntityManager.AddComponent<EditableGeneratedSurface>(area);
                 // Keep the native nodes, triangles, projection ranges and narrow
                 // overlay renderer. Only the automatic mesh/ownership machinery
                 // is removed; the area tool can now author its own geometry.

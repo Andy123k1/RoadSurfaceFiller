@@ -23,7 +23,6 @@ namespace SurfaceNetworkFilter
         private int m_Frame;
         private int m_SaveResponse;
         private string m_SavedRuleId = "";
-        private bool m_JunctionActionPending;
 
         private static bool IsInLoadedCity()
         {
@@ -40,7 +39,10 @@ namespace SurfaceNetworkFilter
             AddBinding(m_State = new ValueBinding<string>(Group, "state", "{}"));
             AddBinding(m_RoadToolActive = new ValueBinding<bool>(Group, "roadToolActive", false));
             AddBinding(new TriggerBinding(Group, "togglePanel", () => { m_EditorRequest = 0; Publish(); m_Open.Update(!m_Open.value); }));
-            AddBinding(new TriggerBinding(Group, "closePanel", () => { UpgradeTool().Cancel(); m_Open.Update(false); }));
+            AddBinding(new TriggerBinding(Group, "closePanel", () => {
+                World.GetOrCreateSystemManaged<ManualSurfaceEditorSystem>().Stop();
+                UpgradeTool().Cancel(); JunctionCycleTool().Cancel(); m_Open.Update(false);
+            }));
             AddBinding(new TriggerBinding<string>(Group, "saveRule", SaveRule));
             AddBinding(new TriggerBinding<string>(Group, "deleteRule", DeleteRule));
             AddBinding(new TriggerBinding<string, bool>(Group, "enableRule", EnableRule));
@@ -50,10 +52,9 @@ namespace SurfaceNetworkFilter
             AddBinding(new TriggerBinding(Group, "restoreAllRoads", RestoreAllRoads));
             AddBinding(new TriggerBinding<string>(Group, "newRoadPreset", SelectNewRoadPreset));
             AddBinding(new TriggerBinding(Group, "openSegmentPresets", () => { m_EditorRequest++; Publish(); m_Open.Update(true); }));
-            AddBinding(new TriggerBinding<int>(Group, "junctionEnd", SetJunctionEnd));
-            AddBinding(new TriggerBinding(Group, "junctionNextRoad", () => RequestJunctionAction(JunctionAction.NextRoad)));
-            AddBinding(new TriggerBinding(Group, "junctionUseSelected", () => RequestJunctionAction(JunctionAction.UseSelectedRoad)));
-            AddBinding(new TriggerBinding(Group, "junctionAutomatic", () => RequestJunctionAction(JunctionAction.Automatic)));
+            AddBinding(new TriggerBinding(Group, "junctionNextRoad", () => BeginJunctionTool(false)));
+            AddBinding(new TriggerBinding(Group, "stopJunctionCycle", () => { JunctionCycleTool().Cancel(); Publish(); }));
+            AddBinding(new TriggerBinding(Group, "junctionAutomatic", () => BeginJunctionTool(true)));
             AddSegmentRuleBindings();
         }
 
@@ -65,46 +66,23 @@ namespace SurfaceNetworkFilter
             bool replacing = roadTool && World.GetOrCreateSystemManaged<Game.Tools.NetToolSystem>().actualMode == Game.Tools.NetToolSystem.Mode.Replace;
             if (m_RoadToolActive.value != roadTool) { m_RoadToolActive.Update(roadTool); if (roadTool) Publish(); }
             if (m_RoadReplaceMode != replacing) { m_RoadReplaceMode = replacing; Publish(); }
-            if (++m_Frame % 15 == 0 && (m_Open.value || roadTool))
-            {
-                if (m_JunctionActionPending && RuntimeState.JunctionRequests.Count == 0)
-                {
-                    m_JunctionActionPending = false;
-                    m_Message = RuntimeState.JunctionMessage;
-                }
+            if (++m_Frame % 15 == 0 && (m_Open.value || roadTool || RuntimeState.JunctionCycleActive))
                 Publish();
-            }
         }
+
+        private JunctionCycleToolSystem JunctionCycleTool() => World.GetOrCreateSystemManaged<JunctionCycleToolSystem>();
 
         protected override void OnGameLoaded(Colossal.Serialization.Entities.Context context)
         {
             base.OnGameLoaded(context);
-            m_Open.Update(false); m_Message = ""; m_EditorRequest = 0; m_JunctionActionPending = false; Publish();
+            m_Open.Update(false); m_Message = ""; m_EditorRequest = 0; Publish();
         }
 
-        private void SetJunctionEnd(int value)
+        private void BeginJunctionTool(bool restoreAutomatic)
         {
-            Setting setting = Mod.ActiveSetting;
-            if (setting == null || !IsInLoadedCity() || !Enum.IsDefined(typeof(JunctionEnd), value)) return;
-            setting.JunctionEnd = (JunctionEnd)value;
-            setting.ApplyAndSave();
-            Publish();
-        }
-
-        private void RequestJunctionAction(JunctionAction action)
-        {
-            Setting setting = Mod.ActiveSetting;
-            if (setting == null || !IsInLoadedCity()) return;
-            // Wait for the main-loop selection snapshot after changing ends,
-            // so a quick follow-up click cannot edit the previous junction.
-            if (!RuntimeState.JunctionEditor.Available || RuntimeState.JunctionEditor.End != setting.JunctionEnd)
-            {
-                m_Message = "Select a connected road near the junction with the Info tool first.";
-                Publish(); return;
-            }
-            RuntimeState.RequestJunctionAction(action);
-            m_JunctionActionPending = true;
-            m_Message = "Junction pavement change queued.";
+            if (!IsInLoadedCity() || Mod.ActiveSetting == null) return;
+            World.GetOrCreateSystemManaged<ManualSurfaceEditorSystem>().Stop();
+            UpgradeTool().Cancel(); JunctionCycleTool().Begin(restoreAutomatic); m_Open.Update(true);
             Publish();
         }
 
@@ -120,21 +98,24 @@ namespace SurfaceNetworkFilter
                 if (rule == null || rule.Assignments == null || rule.Assignments.Count > 4 ||
                     !Enum.IsDefined(typeof(RoadCategory), rule.Category))
                     throw new ArgumentException("Choose valid surface targets and a road category.");
-                rule.SeparateBikeLanes = rule.SeparateBikeLanes ?? false;
-                rule.SeparateBusLanes = rule.SeparateBusLanes ?? false;
-                if (rule.FillBusShoulders) rule.SeparateBusLanes = true;
+                // General-rule checkboxes own lane separation. An empty
+                // selected assignment explicitly preserves its native finish.
+                rule.SeparateBikeLanes = rule.Assignments.Any(item => item?.Target == SurfaceTarget.BikeLanes);
+                rule.SeparateBusLanes = rule.Assignments.Any(item => item?.Target == SurfaceTarget.BusLanes);
                 rule.LegacyLaneFallback = false;
-                if (rule.Assignments.Count == 0 && rule.SeparateBikeLanes != true && rule.SeparateBusLanes != true)
-                    throw new ArgumentException("Select at least one surface target or lane separation option.");
+                if (rule.Assignments.Count == 0)
+                    throw new ArgumentException("Select at least one surface target.");
                 HashSet<SurfaceTarget> targets = new HashSet<SurfaceTarget>();
                 foreach (SurfaceAssignment item in rule.Assignments)
                 {
                     if (item == null || !Enum.IsDefined(typeof(SurfaceTarget), item.Target) || item.Target == SurfaceTarget.Both ||
                         !targets.Add(item.Target)) throw new ArgumentException("Each surface target can be selected once.");
                     item.Surface = item.Surface ?? "";
-                    bool lane = item.Target == SurfaceTarget.BikeLanes || item.Target == SurfaceTarget.BusLanes;
-                    if (!lane && string.IsNullOrWhiteSpace(item.Surface))
-                        throw new ArgumentException("Choose a surface for every selected road or sidewalk target.");
+                    if (item.UseRoadPavement)
+                    {
+                        if (item.Target == SurfaceTarget.Roads) throw new ArgumentException("Road pavement must choose its own surface.");
+                        item.Surface = "";
+                    }
                     if (rule.Enabled && rule.TargetActive(item.Target) && item.Surface.Length > 0 &&
                         !RuntimeState.TryGetSurface(item.Surface, out _))
                         throw new ArgumentException("A selected surface is unavailable. Refresh the list or choose another surface.");
@@ -229,7 +210,7 @@ namespace SurfaceNetworkFilter
             Setting setting = Mod.ActiveSetting;
             if (setting == null) return;
             JunctionEditorState junction = RuntimeState.JunctionEditor;
-            bool junctionReady = IsInLoadedCity() && junction.End == setting.JunctionEnd;
+            bool junctionReady = IsInLoadedCity() && RuntimeState.JunctionCycleActive;
             m_State.Update(JsonConvert.SerializeObject(new {
                 enabled = setting.Enabled,
                 newRoadPresetId = RuntimeState.NewRoadPresetId,
@@ -245,10 +226,13 @@ namespace SurfaceNetworkFilter
                     separateBikeLanes = rule.SeparateBikeLanes == true, separateBusLanes = rule.SeparateBusLanes == true,
                     fillBusShoulders = rule.FillBusShoulders,
                     assignments = rule.Assignments.Select(item => new { target = (int)item.Target, surface = item.Surface,
+                        useRoadPavement = item.UseRoadPavement,
                         available = item.Surface.Length == 0 || RuntimeState.TryGetSurface(item.Surface, out _) }).ToArray(),
                     available = rule.ActiveAssignments.All(item => item.Surface.Length == 0 || RuntimeState.TryGetSurface(item.Surface, out _))
                 }).ToArray(),
                 surfaces = RuntimeState.GetSurfaceNames("").ToArray(),
+                surfacePreviews = RuntimeState.SurfacePreviews,
+                installedSurfaces = RuntimeState.GetInstalledSurfaceNames().ToArray(),
                 roadTypes = RuntimeState.RoadNames.ToArray(),
                 status = RuntimeState.Status,
                 message = m_Message,
@@ -259,24 +243,26 @@ namespace SurfaceNetworkFilter
                     id = item.Rule.Id, name = item.Rule.Name, enabled = true, fillBusShoulders = item.FillBusShoulders,
                     updateExistingSegments = item.UpdateExistingSegments,
                     separateBikeLanes = item.Rule.SeparateBikeLanes, separateBusLanes = item.Rule.SeparateBusLanes,
-                    assignments = item.Rule.Assignments.Select(target => new { target = (int)target.Target, surface = target.Surface }).ToArray(),
+                    assignments = item.Rule.Assignments.Select(target => new { target = (int)target.Target, surface = target.Surface,
+                        useRoadPavement = target.UseRoadPavement }).ToArray(),
                     available = item.Rule.Assignments.All(target => target.Surface.Length == 0 || RuntimeState.TryGetSurface(target.Surface, out _))
                 }).ToArray(),
                 upgrade = new { active = RuntimeState.UpgradeActive, count = RuntimeState.UpgradeSelectionCount, mode = (int)RuntimeState.UpgradeMode,
                     label = RuntimeState.UpgradeLabel, message = RuntimeState.UpgradeMessage },
+                manualEditor = new { active = RuntimeState.ManualSurfaceEditorActive, message = RuntimeState.ManualSurfaceEditorMessage },
                 segmentRuleCount = RuntimeState.SegmentRuleCount,
                 activeSegmentRuleCount = RuntimeState.ActiveSegmentRuleCount,
                 junction = new {
                     available = junctionReady && junction.Available,
-                    end = (int)setting.JunctionEnd,
                     canCycle = junctionReady && junction.CanCycle,
-                    canUseSelected = junctionReady && junction.CanUseSelected,
                     hasOverride = junctionReady && junction.HasOverride,
                     kind = junction.Kind, source = junctionReady ? junction.Source : "",
                     surface = junctionReady ? junction.Surface : "",
                     status = RuntimeState.JunctionStatus,
-                    pending = m_JunctionActionPending
+                    pending = RuntimeState.JunctionRequests.Count > 0
                 },
+                junctionTool = new { active = RuntimeState.JunctionCycleActive,
+                    restoreAutomatic = RuntimeState.JunctionRestoreAutomatic, message = RuntimeState.JunctionMessage },
                 version = typeof(Mod).Assembly.GetName().Version.ToString(3)
             }));
         }

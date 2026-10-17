@@ -29,10 +29,15 @@ namespace SurfaceNetworkFilter
             updateSystem.UpdateBefore<SurfaceNetworkFilterSystem, ModificationSystem>(SystemUpdatePhase.MainLoop);
             updateSystem.UpdateAt<SurfaceRuleUISystem>(SystemUpdatePhase.UIUpdate);
             updateSystem.UpdateAt<SegmentUpgradeToolSystem>(SystemUpdatePhase.ToolUpdate);
+            updateSystem.UpdateAt<JunctionCycleToolSystem>(SystemUpdatePhase.ToolUpdate);
+            updateSystem.UpdateBefore<ManualSurfaceEditorSystem, Game.Tools.AreaToolSystem>(SystemUpdatePhase.ToolUpdate);
+            updateSystem.UpdateBefore<ManualSurfaceEditorSystem, Game.Tools.GenerateAreasSystem>(SystemUpdatePhase.Modification1);
+            updateSystem.UpdateBefore<ManualSurfaceEditorSystem, Game.Tools.ApplyAreasSystem>(SystemUpdatePhase.ApplyTool);
             updateSystem.UpdateAt<RoadSurfaceReplaceSystem>(SystemUpdatePhase.PostTool);
             updateSystem.UpdateBefore<RoadSurfaceApplyCaptureSystem, Game.Tools.ApplyNetSystem>(SystemUpdatePhase.ApplyTool);
             updateSystem.UpdateBefore<RoadNodeProvenanceSystem, Game.Tools.GenerateEdgesSystem>(SystemUpdatePhase.Modification2);
             updateSystem.UpdateBefore<NetworkOverlayPrefabSystem, PrefabInitializeSystem>(SystemUpdatePhase.PrefabUpdate);
+            updateSystem.UpdateAt<JunctionPrefabReferencesSystem>(SystemUpdatePhase.PrefabReferences);
             updateSystem.UpdateBefore<SurfaceProjectionSystem, Game.Areas.SearchSystem>(SystemUpdatePhase.Modification5);
             updateSystem.UpdateBefore<SurfaceProjectionSystem, AreaBatchSystem>(SystemUpdatePhase.PreCulling);
         }

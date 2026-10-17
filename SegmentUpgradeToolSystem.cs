@@ -20,6 +20,7 @@ namespace SurfaceNetworkFilter
         private string m_BusSurface;
         private bool m_RemoveStroke;
         private bool m_InputFocused;
+        private bool m_EditableRequestPending;
         public override string toolID => "SurfaceNetworkFilterUpgrade";
         public override PrefabBase GetPrefab() => null;
         public override bool TrySetPrefab(PrefabBase prefab) => false;
@@ -51,11 +52,13 @@ namespace SurfaceNetworkFilter
         }
         internal void ClearSelection()
         {
+            m_EditableRequestPending = false;
             Dependency.Complete();
             foreach (Entity edge in new List<Entity>(m_Highlighted)) Highlight(edge, false);
             m_Selected.Clear(); m_Stroke.Clear(); m_Hover = Entity.Null;
             RuntimeState.UpgradeSelectionCount = 0;
         }
+        internal void EditableRoadRequestComplete() => m_EditableRequestPending = false;
         protected override void OnStartRunning() { base.OnStartRunning(); m_InputFocused = true; EnableUpgradeActions(); }
         protected override void OnStopRunning() { ClearSelection(); RuntimeState.UpgradeActive = false; m_InputFocused = false; base.OnStopRunning(); }
         protected override void OnFocusChanged(bool focus) { m_InputFocused = focus; EnableUpgradeActions(); }
@@ -85,6 +88,18 @@ namespace SurfaceNetworkFilter
             {
                 if (!m_Selected.Contains(m_Hover)) Highlight(m_Hover, false);
                 m_Hover = hover; Highlight(hover, true);
+            }
+            if (m_Mode == SegmentUpgradeMode.MakeEditable)
+            {
+                if (!m_EditableRequestPending && applyAction.WasPressedThisFrame() && hover != Entity.Null)
+                {
+                    m_EditableRequestPending = true;
+                    RuntimeState.UpgradeMessage = "Preparing this road's surfaces for editing…";
+                    RuntimeState.UpgradeRequests.Add(new RuntimeState.SegmentUpgradeRequest {
+                        Edges = new List<Entity> { hover }, Mode = m_Mode, BusSurface = ""
+                    });
+                }
+                return default;
             }
             if (applyAction.WasPressedThisFrame())
             { m_Stroke.Clear(); m_RemoveStroke = m_Selected.Contains(hover); }

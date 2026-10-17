@@ -56,7 +56,7 @@ namespace SurfaceNetworkFilter
         {
             foreach (RuntimeState.SegmentUpgradeRequest request in RuntimeState.UpgradeRequests)
             {
-                int applied = 0, skipped = 0, converted = 0;
+                int applied = 0, skipped = 0;
                 string reason = "";
                 foreach (Entity edge in request.Edges)
                 {
@@ -64,7 +64,11 @@ namespace SurfaceNetworkFilter
                     {
                         if (!IsRoadEdge(edge)) throw new ArgumentException("Some selected roads no longer exist.");
                         if (request.Mode == SegmentUpgradeMode.MakeEditable)
-                        { converted += MakeRoadSurfacesEditable(edge); applied++; continue; }
+                        {
+                            MakeRoadSurfacesEditable(edge);
+                            World.GetOrCreateSystemManaged<SegmentUpgradeToolSystem>().Cancel();
+                            OpenManualSurfaceEditor(); applied++; continue;
+                        }
                         if (request.Mode == SegmentUpgradeMode.ResumeAutomatic)
                         { ResumeAutomaticRoadSurfaces(edge); applied++; continue; }
                         if (request.Mode == SegmentUpgradeMode.RestoreVanilla) RestoreRoadToVanilla(edge);
@@ -73,16 +77,22 @@ namespace SurfaceNetworkFilter
                         QueueRoadStyleRebuild(edge); applied++;
                     }
                     catch (ArgumentException exception) { skipped++; reason = exception.Message; }
+                    finally
+                    {
+                        if (request.Mode == SegmentUpgradeMode.MakeEditable)
+                            World.GetOrCreateSystemManaged<SegmentUpgradeToolSystem>().EditableRoadRequestComplete();
+                    }
                 }
                 if (applied > 0 && !setting.Enabled) { setting.Enabled = true; setting.ApplyAndSave(); }
                 RuntimeState.UpgradeMessage = request.Mode == SegmentUpgradeMode.MakeEditable
-                    ? converted + " surfaces made editable on " + applied + " segments. Automatic updates are paused on these roads. Use the surface editor to change their boundaries."
+                    ? (applied > 0 ? "Surface editor opened. Each converted surface keeps its existing finish. Drag boundary points or add points along edges." : reason)
                     : request.Mode == SegmentUpgradeMode.ResumeAutomatic
                     ? applied + " segments returned to automatic updates. Independent areas are kept; remove them manually if they overlap."
                     : applied + (request.Mode == SegmentUpgradeMode.RestoreVanilla ? " segments restored to vanilla surfaces." :
                     request.Mode == SegmentUpgradeMode.RemoveBusShoulders ? " segments set to bus-lane shoulders off. Surfaces queued for updating." :
                     " segments updated. Surfaces queued for updating.");
-                if (skipped > 0) RuntimeState.UpgradeMessage += " " + skipped + " skipped. " + reason;
+                if (skipped > 0 && (request.Mode != SegmentUpgradeMode.MakeEditable || applied > 0))
+                    RuntimeState.UpgradeMessage += " " + skipped + " skipped. " + reason;
             }
             RuntimeState.UpgradeRequests.Clear();
         }
@@ -126,7 +136,8 @@ namespace SurfaceNetworkFilter
                 rule.Name = saved.Name.ToString();
                 rule.SeparateBikeLanes = saved.BikeMode == 0 ? (bool?)null : saved.BikeMode == 2;
                 foreach (SavedSegmentSurfaceTarget target in EntityManager.GetBuffer<SavedSegmentSurfaceTarget>(record, true))
-                    rule.Assignments.Add(new SurfaceAssignment { Target = target.Target, Surface = target.SurfaceName.ToString() });
+                    rule.Assignments.Add(new SurfaceAssignment { Target = target.Target, Surface = target.SurfaceName.ToString(),
+                        UseRoadPavement = SegmentUsesRoadPavement(record, target.Target) });
             }
             if (string.IsNullOrEmpty(surface))
             {

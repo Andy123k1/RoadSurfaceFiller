@@ -531,8 +531,8 @@ namespace SurfaceNetworkFilter
                 Entity rulePrefab = hasStreet ? streetPrefab : GetJunctionReferencePrefab(node, false);
                 if (rulePrefab == Entity.Null) return;
                 Entity ruleEdge = FindJunctionRuleRoad(node, rulePrefab, owner);
-                roads = GetChoices(setting, SurfaceTarget.Roads, rulePrefab, streetContext: true, segment: ruleEdge);
-                sidewalks = setting.IncludeStreets ? GetChoices(setting, SurfaceTarget.Sidewalks, rulePrefab, streetContext: true, segment: ruleEdge) : new List<SurfaceChoice>();
+                roads = ruleEdge == Entity.Null ? new List<SurfaceChoice>() : GetChoices(setting, SurfaceTarget.Roads, rulePrefab, streetContext: true, segment: ruleEdge);
+                sidewalks = setting.IncludeStreets && ruleEdge != Entity.Null ? GetChoices(setting, SurfaceTarget.Sidewalks, rulePrefab, streetContext: true, segment: ruleEdge) : new List<SurfaceChoice>();
                 if (setting.IncludeStreets && sidewalks.Count == 0)
                 {
                     Entity walkSource = FindActiveJunctionRuleRoad(node, SurfaceTarget.Sidewalks, setting, hasStreet);
@@ -563,14 +563,14 @@ namespace SurfaceNetworkFilter
                 Entity rulePrefab = GetJunctionReferencePrefab(node, false);
                 if (rulePrefab == Entity.Null) return;
                 Entity ruleEdge = FindJunctionRuleRoad(node, rulePrefab, owner);
-                roads = GetChoices(setting, SurfaceTarget.Roads, rulePrefab, segment: ruleEdge);
-                sidewalks = setting.IncludeHighwaySidewalks ? GetChoices(setting, SurfaceTarget.Sidewalks,
+                roads = ruleEdge == Entity.Null ? new List<SurfaceChoice>() : GetChoices(setting, SurfaceTarget.Roads, rulePrefab, segment: ruleEdge);
+                sidewalks = setting.IncludeHighwaySidewalks && ruleEdge != Entity.Null ? GetChoices(setting, SurfaceTarget.Sidewalks,
                     rulePrefab, segment: ruleEdge) : new List<SurfaceChoice>();
                 name = m_PrefabSystem.GetPrefabName(rulePrefab);
                 curve = JunctionMaterialSeed(curve, node);
             }
             if (!TryReadSurfaceLayout(prefab, out SurfaceLayout layout, fallback, start,
-                highway: roundabout && !streetContext && approach.Highway, streetContext: streetContext))
+                highway: !streetContext && approach.Highway, streetContext: streetContext))
             {
                 if (!m_LoggedMissingNodeLayout)
                 {
@@ -605,8 +605,9 @@ namespace SurfaceNetworkFilter
                 mainRoad = physicalMain;
                 if (mainRoad != Entity.Null)
                 {
-                    junctionRoads = GetChoices(setting, SurfaceTarget.Roads, mainRoad, streetContext: !IsHighwayPrefab(mainRoad),
-                        segment: FindJunctionRuleRoad(node, mainRoad, owner));
+                    Entity referenceEdge = FindJunctionRuleRoad(node, mainRoad, owner);
+                    junctionRoads = referenceEdge == Entity.Null ? new List<SurfaceChoice>() :
+                        GetChoices(setting, SurfaceTarget.Roads, mainRoad, streetContext: !IsHighwayPrefab(mainRoad), segment: referenceEdge);
                     junctionRoadName = m_PrefabSystem.GetPrefabName(mainRoad);
                     junctionRoadSeed = JunctionMaterialSeed(curve, node);
                     if (m_LoggedMainRoadJunctions.Count < 8 && m_LoggedMainRoadJunctions.Add(node))
@@ -627,13 +628,13 @@ namespace SurfaceNetworkFilter
             }
             SurfaceChoice road = savedPavement ? GetSavedJunctionChoice(node) : Choose(junctionRoads, junctionRoadName, junctionRoadSeed, 0);
             if (road == null && !savedPavement && !manualPavement &&
-                (roundabout || crosswalkOwned || setting.MainRoadJunctionSurfaces))
+                (roundabout || crosswalkOwned || setting.MainRoadJunctionSurfaces || highwayThroughJunction))
             {
-                // A wider new vanilla branch can become the physical reference
-                // without having a material. Keep the existing styled road as
-                // the material source for the shared junction interior.
-                Entity source = FindActiveJunctionRuleRoad(node, SurfaceTarget.Roads, setting, roundabout && hasStreet);
-                if (source != Entity.Null) road = GetRoadJunctionSurfaceOptions(source, setting).Find(option => option.Target == SurfaceTarget.Roads)?.Surface;
+                // Preserve the physical reference, curb recovery and masks.
+                // Fall back to an eligible connected segment's real finish;
+                // mixed rings prefer styled streets, then styled highways.
+                JunctionSurfaceOption automatic = FindAutomaticJunctionSurface(node, setting, hasStreet);
+                if (automatic != null) road = automatic.Surface;
             }
             if (!savedPavement && !manualPavement && !roundabout && CountJunctionRoads(node) == 1)
             {

@@ -59,7 +59,7 @@ namespace SurfaceNetworkFilter
         [SettingsUIMultilineText]
         public string JunctionHelp
         {
-            get { return "Select the road whose pavement you want to continue through a junction or around a roundabout. Open this tab and choose Use selected road's surface. The nearest junction is targeted; choose Other end to change the junction at the other end of that segment. Choices are saved with the city and update connected segments automatically."; }
+            get { return "Under Tools, activate Cycle junction surface or Restore automatic. Left-click junctions or roundabouts directly. Each click cycles the finish or clears its saved choice. The tool stays active until you right-click. Choices are saved with the city and connected segments update automatically."; }
             set { }
         }
         [SettingsUIHidden]
@@ -115,12 +115,14 @@ namespace SurfaceNetworkFilter
             Entity road = GetPreferredJunctionRoad(node);
             Entity prefab = GetPreferredJunctionPrefab(node);
             hash = Mix(Mix(Mix(Mix(hash, road.Index), road.Version), prefab.Index), prefab.Version);
+            hash = MixAutomaticJunctionStyles(hash, node);
             return road == Entity.Null ? hash : MixBezier(hash, EntityManager.GetComponentData<Curve>(road).m_Bezier);
         }
 
         private bool IsEditableSurfaceJunction(Entity node)
         {
             if (!EntityManager.Exists(node) || EntityManager.HasComponent<Deleted>(node) ||
+                EntityManager.HasComponent<Game.Tools.Temp>(node) ||
                 !EntityManager.HasComponent<Game.Net.Node>(node) ||
                 !EntityManager.HasBuffer<ConnectedEdge>(node)) return false;
             int count = 0;
@@ -135,6 +137,36 @@ namespace SurfaceNetworkFilter
                         EntityManager.GetComponentData<EndNodeGeometry>(connection.m_Edge).m_Geometry.m_MiddleRadius > 0.01f) return true;
                 }
             return count >= 2;
+        }
+
+        internal Entity FindJunctionCycleTarget(Entity hit, float3 position)
+        {
+            if (IsEditableSurfaceJunction(hit)) return hit;
+            if (!IsRoadEdge(hit)) return Entity.Null;
+            Edge ends = EntityManager.GetComponentData<Edge>(hit);
+            Entity target = Entity.Null;
+            float nearest = float.MaxValue;
+            // At the mesh seam the native raycast can return an approach edge.
+            // Accept only its actual junction geometry, never a remote end just
+            // because it happens to be the nearest junction on a long road.
+            for (int end = 0; end < 2; end++)
+            {
+                Entity node = end == 0 ? ends.m_Start : ends.m_End;
+                if (!IsEditableSurfaceJunction(node)) continue;
+                Colossal.Mathematics.Bounds3 bounds;
+                if (end == 0 && EntityManager.HasComponent<StartNodeGeometry>(hit))
+                    bounds = EntityManager.GetComponentData<StartNodeGeometry>(hit).m_Geometry.m_Bounds;
+                else if (end == 1 && EntityManager.HasComponent<EndNodeGeometry>(hit))
+                    bounds = EntityManager.GetComponentData<EndNodeGeometry>(hit).m_Geometry.m_Bounds;
+                else if (EntityManager.HasComponent<NodeGeometry>(node))
+                    bounds = EntityManager.GetComponentData<NodeGeometry>(node).m_Bounds;
+                else continue;
+                if (!math.all(position >= bounds.min - new float3(0.5f, 2f, 0.5f)) ||
+                    !math.all(position <= bounds.max + new float3(0.5f, 2f, 0.5f))) continue;
+                float distance = math.distancesq(position, EntityManager.GetComponentData<Game.Net.Node>(node).m_Position);
+                if (distance < nearest) { target = node; nearest = distance; }
+            }
+            return target;
         }
 
         private bool IsRoundaboutJunction(Entity node)
@@ -182,7 +214,11 @@ namespace SurfaceNetworkFilter
         {
             Entity selected = RuntimeState.SelectedEdge;
             Entity target = Entity.Null;
-            if (IsRoadEdge(selected))
+            if (RuntimeState.JunctionCycleActive)
+            {
+                if (IsEditableSurfaceJunction(RuntimeState.JunctionCycleTarget)) target = RuntimeState.JunctionCycleTarget;
+            }
+            else if (IsRoadEdge(selected))
             {
                 Edge ends = EntityManager.GetComponentData<Edge>(selected);
                 bool first = IsEditableSurfaceJunction(ends.m_Start), second = IsEditableSurfaceJunction(ends.m_End);
@@ -200,11 +236,16 @@ namespace SurfaceNetworkFilter
                 RuntimeState.JunctionRequests.RemoveAt(0);
                 if (!IsEditableSurfaceJunction(request.Node))
                 {
-                    RuntimeState.JunctionMessage = "Select a road with a connected junction first.";
+                    RuntimeState.JunctionMessage = "That junction is no longer available. Point at another junction.";
                     continue;
                 }
                 if (request.Action == JunctionAction.Automatic)
                 {
+                    if (!TryGetSavedJunctionSurface(request.Node, out _) && !EntityManager.HasComponent<JunctionSurfacePriority>(request.Node))
+                    {
+                        RuntimeState.JunctionMessage = "This junction already uses automatic pavement selection.";
+                        continue;
+                    }
                     ClearSavedJunctionSurface(request.Node);
                     EntityManager.RemoveComponent<JunctionSurfacePriority>(request.Node);
                     RuntimeState.JunctionMessage = "Automatic pavement priority restored.";
@@ -281,18 +322,28 @@ namespace SurfaceNetworkFilter
             bool separate = !manual && !roundabout && GetJunctionPavementDomain(target) == null && !setting.MainRoadJunctionSurfaces && !IsHighwayPrefab(automatic);
             Entity materialPrefab = manual ? preferredPrefab : automatic;
             Curve seed = manual && preferred != Entity.Null ? EntityManager.GetComponentData<Curve>(preferred) : JunctionMaterialSeed(default, target);
-            SurfaceChoice surface = savedPavement ? GetSavedJunctionChoice(target) : separate ? null : Choose(GetChoices(setting, SurfaceTarget.Roads, materialPrefab,
-                streetContext: !manual && (roundabout || !IsHighwayPrefab(materialPrefab)),
-                segment: preferred != Entity.Null ? preferred : FindJunctionRuleRoad(target, materialPrefab)),
+            Entity materialEdge = preferred != Entity.Null ? preferred : FindJunctionRuleRoad(target, materialPrefab);
+            SurfaceChoice surface = savedPavement ? GetSavedJunctionChoice(target) : separate || materialEdge == Entity.Null ? null : Choose(GetChoices(setting, SurfaceTarget.Roads, materialPrefab,
+                streetContext: !manual && (roundabout ? TryGetConnectedStreetPrefab(target, out _) : !IsHighwayPrefab(materialPrefab)),
+                segment: materialEdge),
                 m_PrefabSystem.GetPrefabName(materialPrefab), seed, 0);
+            if (surface == null && !manual && !separate)
+            {
+                JunctionSurfaceOption fallback = FindAutomaticJunctionSurface(target, setting, TryGetConnectedStreetPrefab(target, out _));
+                if (fallback != null)
+                {
+                    surface = fallback.Surface;
+                    source = "Automatic — " + JunctionRoadLabel(fallback.Road);
+                }
+            }
             string surfaceName = surface == null ? "" : m_PrefabSystem.GetPrefabName(surface.Prefab);
             if (IsNetworkOverlayPrefab(surfaceName)) surfaceName = surfaceName.Substring(NetworkOverlayPrefix.Length);
             RuntimeState.JunctionEditor = new JunctionEditorState {
                 Available = true, End = setting.JunctionEnd,
                 Kind = roundabout ? "Roundabout" : "Junction", Source = separate ? "Each connected road" : source,
-                Surface = savedPavement && surface == null ? "Saved surface is unavailable; the choice has been retained." : surfaceName,
+                Surface = savedPavement && surface == null ? UnavailableJunctionSurfaceMessage(target) : surfaceName,
                 CanCycle = canCycle, HasOverride = savedPavement || EntityManager.HasComponent<JunctionSurfacePriority>(target),
-                CanUseSelected = IsRoadEdge(selected) && EffectiveRoadJunctionOption(selected, setting) != null
+                CanUseSelected = !RuntimeState.JunctionCycleActive && IsRoadEdge(selected) && EffectiveRoadJunctionOption(selected, setting) != null
             };
         }
     }

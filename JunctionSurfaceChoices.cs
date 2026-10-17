@@ -35,6 +35,88 @@ namespace SurfaceNetworkFilter
             internal SurfaceTarget Target;
             internal bool CoverBusLanes;
         }
+
+        private JunctionSurfaceOption FindAutomaticJunctionSurface(Entity node, Setting setting, bool preferStreets)
+        {
+            JunctionSurfaceOption result = null;
+            bool resultStreet = false;
+            float widest = -1f;
+            if (!EntityManager.HasBuffer<ConnectedEdge>(node)) return null;
+            foreach (ConnectedEdge connected in EntityManager.GetBuffer<ConnectedEdge>(node, true))
+            {
+                Entity edge = connected.m_Edge;
+                if (!IsRoadEdge(edge) || !HasPlacementRules(edge)) continue;
+                Entity prefab = EntityManager.GetComponentData<PrefabRef>(edge).m_Prefab;
+                if (!PassesRoadFilter(edge, prefab, setting) || !PassesElevationFilter(edge, prefab, setting)) continue;
+                // Resolve the actual segment's finish, as the cycler does. A
+                // prefab reference alone can point at an unstyled approach or
+                // force a highway preset through the street-category filter.
+                JunctionSurfaceOption option = EffectiveRoadJunctionOption(edge, setting);
+                if (option == null) continue;
+                bool street = !IsHighway(edge);
+                if (result != null && preferStreets && street != resultStreet)
+                {
+                    if (!street) continue;
+                    result = null; widest = -1f;
+                }
+                float width = EntityManager.HasComponent<NetGeometryData>(prefab) ?
+                    EntityManager.GetComponentData<NetGeometryData>(prefab).m_DefaultWidth : 0f;
+                if (result == null || width > widest + 0.01f ||
+                    (math.abs(width - widest) <= 0.01f && edge.Index < result.Road.Index))
+                { result = option; resultStreet = street; widest = width; }
+            }
+            return result;
+        }
+
+        private int MixAutomaticJunctionStyles(int hash, Entity node)
+        {
+            if (!EntityManager.HasBuffer<ConnectedEdge>(node)) return hash;
+            int connectedStyles = 0, count = 0;
+            unchecked
+            {
+                foreach (ConnectedEdge connection in EntityManager.GetBuffer<ConnectedEdge>(node, true))
+                {
+                    Entity edge = connection.m_Edge;
+                    if (!IsRoadEdge(edge)) continue;
+                    Entity prefab = EntityManager.GetComponentData<PrefabRef>(edge).m_Prefab;
+                    int part = Mix(Mix(Mix(Mix(edge.Index, edge.Version), prefab.Index), prefab.Version), UsesCityRules(edge) ? 1 : 0);
+                    part = MixSegmentRule(part, edge);
+                    part = Mix(part, EntityManager.HasComponent<ManualSurfaceRoad>(edge) ? 1 : 0);
+                    part = Mix(part, EntityManager.HasComponent<SurfaceSegmentExcluded>(edge) ? 1 : 0);
+                    part = Mix(part, EntityManager.HasComponent<SurfaceSegmentSelected>(edge) ? 1 : 0);
+                    connectedStyles += MixBezier(part, EntityManager.GetComponentData<Curve>(edge).m_Bezier);
+                    count++;
+                }
+            }
+            // Order-independent and free of material lookup/registration. The
+            // settled-geometry checks can now notice a neighbor's preset change
+            // even when none of the native road geometry has changed.
+            return Mix(Mix(hash, count), connectedStyles);
+        }
+
+        private void QueueAutomaticJunctionApproaches(Entity source)
+        {
+            Setting setting = Mod.ActiveSetting;
+            if (setting == null || !IsRoadEdge(source)) return;
+            Edge ends = EntityManager.GetComponentData<Edge>(source);
+            for (int end = 0; end < 2; end++)
+            {
+                Entity node = end == 0 ? ends.m_Start : ends.m_End;
+                if ((end == 1 && node == ends.m_Start) || !IsEditableSurfaceJunction(node) ||
+                    (!IsRoundaboutJunction(node) && CountJunctionRoads(node) < 3)) continue;
+                foreach (ConnectedEdge connection in EntityManager.GetBuffer<ConnectedEdge>(node, true))
+                {
+                    Entity edge = connection.m_Edge;
+                    if (edge == source || !IsRoadEdge(edge)) continue;
+                    Entity prefab = EntityManager.GetComponentData<PrefabRef>(edge).m_Prefab;
+                    if (!PassesRoadFilter(edge, prefab, setting) || !PassesElevationFilter(edge, prefab, setting)) continue;
+                    // An unstyled approach can own a ring sector. Rebuild its
+                    // junction pieces without enrolling its body in any rule.
+                    // Core deliberately does not recurse into its other node.
+                    QueueEdgeCore(edge);
+                }
+            }
+        }
         private List<JunctionSurfaceOption> GetJunctionSurfaceOptions(Entity node, Setting setting)
         {
             List<JunctionSurfaceOption> result = new List<JunctionSurfaceOption>();

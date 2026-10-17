@@ -32,16 +32,8 @@ namespace SurfaceNetworkFilter
                 m_Message = "Segment rule deleted. Previously upgraded segments keep their saved surfaces."; Publish();
             }));
             AddBinding(new TriggerBinding<string>(Group, "startUpgrade", StartSegmentUpgrade));
-            AddBinding(new TriggerBinding<string>(Group, "openSurfaceEditor", surface => {
-                if (!IsInLoadedCity()) return;
-                try
-                {
-                    World.GetOrCreateSystemManaged<SurfaceNetworkFilterSystem>().OpenManualSurfaceEditor(surface);
-                    m_Open.Update(false);
-                    RuntimeState.UpgradeMessage = "Surface editor opened. Drag area boundary points to reshape independent surfaces. The chosen finish is used when editing.";
-                }
-                catch (ArgumentException exception) { RuntimeState.UpgradeMessage = exception.Message; }
-                Publish();
+            AddBinding(new TriggerBinding(Group, "stopManualSurfaceEditor", () => {
+                World.GetOrCreateSystemManaged<ManualSurfaceEditorSystem>().Stop(); Publish();
             }));
             AddBinding(new TriggerBinding(Group, "applyUpgrade", () => { UpgradeTool().Commit(); Publish(); }));
             AddBinding(new TriggerBinding(Group, "cancelUpgrade", () => { UpgradeTool().Cancel(); Publish(); }));
@@ -61,9 +53,10 @@ namespace SurfaceNetworkFilter
             {
                 UpgradeToolDraft draft = JsonConvert.DeserializeObject<UpgradeToolDraft>(json);
                 if (draft == null || !Enum.IsDefined(typeof(SegmentUpgradeMode), draft.Mode)) throw new ArgumentException("Choose a road tool.");
-                if (draft.Mode == (int)SegmentUpgradeMode.BusShoulders && !string.IsNullOrEmpty(draft.BusSurface) && !RuntimeState.TryGetSurface(draft.BusSurface, out _))
-                    throw new ArgumentException("Choose an installed bus-lane surface.");
-                UpgradeTool().Begin((SegmentUpgradeMode)draft.Mode, draft.BusSurface); Publish();
+                if (draft.Mode == (int)SegmentUpgradeMode.BusShoulders && !string.IsNullOrEmpty(draft.BusSurface) && !RuntimeState.IsSelectableSurface(draft.BusSurface))
+                    throw new ArgumentException("Choose a road-compatible bus-lane surface.");
+                World.GetOrCreateSystemManaged<ManualSurfaceEditorSystem>().Stop();
+                JunctionCycleTool().Cancel(); UpgradeTool().Begin((SegmentUpgradeMode)draft.Mode, draft.BusSurface); Publish();
             }
             catch (Exception exception) when (exception is JsonException || exception is ArgumentException)
             { RuntimeState.UpgradeMessage = exception.Message; Publish(); }
@@ -90,6 +83,11 @@ namespace SurfaceNetworkFilter
                     if (item == null || !Enum.IsDefined(typeof(SurfaceTarget), item.Target) || item.Target == SurfaceTarget.Both || !targets.Add(item.Target))
                         throw new ArgumentException("Each surface target can be selected once.");
                     item.Surface = item.Surface ?? "";
+                    if (item.UseRoadPavement)
+                    {
+                        if (item.Target == SurfaceTarget.Roads) throw new ArgumentException("Road pavement must choose its own surface.");
+                        item.Surface = "";
+                    }
                     if (System.Text.Encoding.UTF8.GetByteCount(item.Surface) > 4000) throw new ArgumentException("The surface name is too long to save.");
                     if (rule.Enabled && item.Surface.Length > 0 && !RuntimeState.TryGetSurface(item.Surface, out _))
                         throw new ArgumentException("A selected surface is unavailable. Refresh the surface list.");
@@ -125,7 +123,8 @@ namespace SurfaceNetworkFilter
                 rule = rule == null ? null : new {
                     id = rule.Id, name = rule.Name, enabled = rule.Enabled,
                     separateBikeLanes = rule.SeparateBikeLanes, separateBusLanes = rule.SeparateBusLanes,
-                    assignments = rule.Assignments.Select(item => new { target = (int)item.Target, surface = item.Surface }).ToArray()
+                    assignments = rule.Assignments.Select(item => new { target = (int)item.Target, surface = item.Surface,
+                        useRoadPavement = item.UseRoadPavement }).ToArray()
                 },
                 response = RuntimeState.SegmentRuleResponse, savedKey = RuntimeState.SavedSegmentRuleKey, message = RuntimeState.SegmentRuleMessage
             };

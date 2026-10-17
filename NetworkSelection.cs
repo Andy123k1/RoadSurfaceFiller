@@ -196,6 +196,9 @@ namespace SurfaceNetworkFilter
             QueueEdge(edge);
             if (IsRoadEdge(edge))
             {
+                // Also refresh neighbors when a preset was removed, so this
+                // road no longer passes HasPlacementRules in QueueEdge.
+                if (!HasPlacementRules(edge)) QueueAutomaticJunctionApproaches(edge);
                 Edge endpoints = EntityManager.GetComponentData<Edge>(edge);
                 ScheduleJunctionGeometryChecks(endpoints.m_Start);
                 ScheduleJunctionGeometryChecks(endpoints.m_End);

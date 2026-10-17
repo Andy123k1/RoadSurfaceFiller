@@ -36,15 +36,6 @@
 .snf-segment-saved strong { display: block; margin-bottom: 7rem; font-size: 13rem; }
 .snf-segment-actions { display: flex; flex-wrap: wrap; margin: 10rem 0; }
 .snf-segment-actions button { margin: 0 7rem 7rem 0; font-size: 12rem; }
-.snf-junction-editor { padding: 10rem 14rem; border-bottom: 1rem solid #40525d; background: #1b2b35; }
-.snf-junction-controls { display: flex; align-items: center; }
-.snf-junction-controls > .snf-eyebrow { flex: 1; }
-.snf-junction-controls > button { margin-left: 7rem; }
-.snf-junction-end { position: relative; width: 155rem; margin-left: 8rem; }
-.snf-junction-end .snf-picker-toggle { font-size: 12rem; }
-.snf-junction-end .snf-picker-menu { position: absolute; top: 100%; left: 0; right: 0; z-index: 5; }
-.snf-junction-source { margin-top: 7rem; color: #c4dbe7; font-size: 11rem; line-height: 1.4; overflow-wrap: break-word; }
-.snf-junction-surface { margin-top: 3rem; color: #91b6c9; }
 .snf-list-column { display: flex; flex-direction: column; flex: 1; min-width: 0; padding: 12rem; }
 .snf-layout-editing .snf-list-column { flex: 0 0 42%; border-right: 1rem solid #40525d; }
 .snf-rule-list { flex: 1; min-height: 0; overflow: hidden; }
@@ -128,13 +119,19 @@
 .snf-field-hint, .snf-note { margin-top: 5rem; font-size: 11rem; line-height: 1.4; color: #a1b9c8; }
 .snf-note { padding-top: 10rem; }
 .snf-picker-toggle { display: flex; align-items: center; width: 100%; min-height: 34rem; padding: 8rem 10rem; border: 1rem solid #546e7b; border-radius: 3rem; background: #101c24; color: #eef6fa; font-size: 13rem; text-align: left; }
-.snf-picker-toggle > span:first-child { flex: 1; overflow-wrap: break-word; }
+.snf-picker-toggle > .snf-picker-label { flex: 1; overflow-wrap: break-word; }
 .snf-chevron { flex: 0 0 auto; width: 0; height: 0; margin-left: 8rem; border-left: 4rem solid transparent; border-right: 4rem solid transparent; border-top: 5rem solid #7ed4ef; }
 .snf-chevron-up { border-top: 0; border-bottom: 5rem solid #7ed4ef; }
 .snf-muted { color: #91a8b6; }
 .snf-picker-menu { margin-top: 3rem; padding: 5rem; border: 1rem solid #6abbd4; background: #1c303d; }
 .snf-picker-search { margin-bottom: 4rem; }
-.snf-picker-items { max-height: 165rem; overflow: hidden; }
+.snf-picker-items { max-height: 220rem; overflow: hidden; }
+.snf-picker-label { min-width: 0; overflow-wrap: break-word; }
+.snf-picker-item.snf-picker-item-preview { display: flex; align-items: center; min-height: 50rem; padding: 6rem 8rem; }
+.snf-picker-item-preview > .snf-picker-label { flex: 1; }
+.snf-surface-preview { display: flex; flex: 0 0 36rem; align-items: center; justify-content: center; width: 36rem; height: 36rem; margin-right: 9rem; overflow: hidden; border: 1rem solid #607988; border-radius: 3rem; background: #18252d; }
+.snf-surface-preview img { width: 100%; height: 100%; object-fit: contain; }
+.snf-preview-unavailable { color: #b4c8d5; font-size: 9rem; line-height: 1.1; text-align: center; }
 .snf-picker-item { display: block; width: 100%; padding: 8rem; border: 0; background: transparent; color: #e1eef6; font-size: 12rem; text-align: left; overflow-wrap: break-word; }
 .snf-picker-item:hover, .snf-picker-item-selected { background: #355568; }
 .snf-picker-empty { padding: 10rem; color: #b4c8d5; font-size: 12rem; }
@@ -160,11 +157,6 @@
 .snf-tool-card { padding: 14rem; margin-bottom: 12rem; border: 1rem solid #405663; border-radius: 4rem; background: #243640; }
 .snf-tool-card h3, .snf-upgrade-selection h3 { margin: 0 0 8rem; font-size: 16rem; overflow-wrap: break-word; }
 .snf-tool-card p, .snf-upgrade-selection p { margin: 0 0 12rem; color: #b8cedb; font-size: 12rem; line-height: 1.5; }
-.snf-junction-tool .snf-junction-editor { margin-top: 12rem; padding: 10rem 0; border-bottom: 0; background: transparent; }
-.snf-junction-tool .snf-junction-controls { flex-wrap: wrap; }
-.snf-junction-tool .snf-junction-controls > .snf-eyebrow { display: none; }
-.snf-junction-tool .snf-junction-end { margin: 0 0 8rem; }
-.snf-junction-tool .snf-junction-controls > button { margin-bottom: 8rem; }
 .snf-panel-compact { width: 100%; }
 .snf-upgrade-selection { padding: 16rem; max-height: calc(100vh - 100rem); }
 .snf-upgrade-selection h3 { margin-top: 8rem; }

@@ -2,7 +2,7 @@
  * Cities: Skylines II UI Module
  * Id: SurfaceNetworkFilter
  * Author: Road Surface Filler
- * Version: 0.5.28
+ * Version: 0.5.36
  * Dependencies:
  */
 
@@ -35,17 +35,40 @@ const categories = [
     { value: 4, label: "Medium streets (16–32 m)" },
     { value: 5, label: "Large streets (over 32 m)" }
 ];
-const junctionEnds = [
-    { value: 0, label: "Nearest junction" },
-    { value: 1, label: "Other end of road" }
-];
 const labelOf = (items, value) => items.find(item => item.value === value)?.label || "Choose…";
 const emptyDraft = () => ({ id: "", name: "", enabled: true, category: 0, roadPrefab: "",
     assignments: [{ target: 0, surface: "" }], separateBikeLanes: false, separateBusLanes: false, fillBusShoulders: false });
 const laneTargetActive = (rule, target) => target === 3 ? !!(rule.separateBikeLanes ?? rule.inheritedBikeLanes) :
     target === 4 ? !!(rule.separateBusLanes ?? rule.inheritedBusLanes) : true;
-const segmentLaneModes = [{ value: null, label: "Use existing lane settings" }, { value: false, label: "Use road pavement" },
-    { value: true, label: "Separate lane surface" }];
+// These numeric values exist only in the editor. Saved surface names remain
+// strings, and native lane modes retain their existing nullable-bool format.
+const roadPavementChoice = -1;
+const inheritedLaneChoice = -2;
+const inheritedFinishChoice = -3;
+const savedLaneHandlingChoice = -4;
+const laneMode = (rule, target) => (target === 3 ? rule.separateBikeLanes : rule.separateBusLanes) ?? null;
+function segmentEditorAssignments(rule) {
+    const assignments = (rule.assignments || []).map(item => ({ ...item }));
+    for (const target of [3, 4]) {
+        if (!assignments.some(item => item.target === target) &&
+            (laneMode(rule, target) !== null || (target === 4 && rule.fillBusShoulders)))
+            assignments.push({ target, surface: "", inheritSurface: true });
+    }
+    return assignments.sort((a, b) => a.target - b.target);
+}
+function segmentLaneValue(rule, item) {
+    if (item.useRoadPavement) return roadPavementChoice;
+    const mode = laneMode(rule, item.target);
+    if (mode === false) return roadPavementChoice;
+    if (item.inheritSurface) return mode === true ? inheritedFinishChoice : inheritedLaneChoice;
+    return mode === null ? savedLaneHandlingChoice : item.surface;
+}
+function savedLaneChoiceLabel(value, surface) {
+    if (value === roadPavementChoice) return "Use road pavement";
+    if (value === inheritedLaneChoice) return "Existing lane settings";
+    if (value === inheritedFinishChoice) return "Existing lane finish";
+    return (surface || "Original finish") + " (existing lane handling)";
+}
 let savedPanelPosition = null;
 let savedPanelSize = null;
 let expandedRuleIds = new Set();
@@ -197,16 +220,60 @@ function ScrollRegion({ children, ...props }) {
             trackVisibility: "scrollable" }, children));
 }
 
+function SurfacePreview({ src, deferred = false }) {
+    const [failed, setFailed] = useState(false);
+    useEffect(() => { setFailed(false); }, [src]);
+    return h("span", { className: "snf-surface-preview", "aria-hidden": true,
+        title: !src || failed ? "Preview unavailable for this surface" : "Surface preview" },
+        src && !failed ? h("img", { src: deferred ? undefined : src, "data-snf-preview-src": deferred ? src : undefined,
+            alt: "", onError: () => setFailed(true) }) :
+            h("span", { className: "snf-preview-unavailable" }, "No image"));
+}
+
 function Picker({ id, value, items, onChange, placeholder = "Choose…", searchable = false, disabled = false, floating = false }) {
     const [expanded, setExpanded] = useState(false);
     const [query, setQuery] = useState("");
     const anchor = useRef(null), menu = useRef(null);
     const [position, setPosition] = useState(null);
     const selected = items.find(item => item.value === value);
+    const previews = items.some(item => item.preview !== undefined);
     const found = useMemo(() => {
         const search = query.toLowerCase().trim();
         return items.filter(item => !search || item.label.toLowerCase().includes(search));
     }, [items, query]);
+    useEffect(() => {
+        if (!expanded || !previews || !menu.current) return;
+        const root = menu.current;
+        let frame = null;
+        const loadVisible = () => {
+            frame = null;
+            const viewport = root.querySelector(".snf-picker-items")?.getBoundingClientRect();
+            if (!viewport) return;
+            const pending = root.querySelectorAll("img[data-snf-preview-src]");
+            for (let i = 0; i < pending.length; i++) {
+                const img = pending[i];
+                const source = img.getAttribute("data-snf-preview-src");
+                if (!source || img.getAttribute("src") === source) continue;
+                const rect = img.getBoundingClientRect();
+                if (rect.bottom >= viewport.top - 40 && rect.top <= viewport.bottom + 40) img.setAttribute("src", source);
+            }
+        };
+        const schedule = () => { if (frame === null) frame = window.requestAnimationFrame(loadVisible); };
+        // Cohtml may not support browser image lazy-loading. Request only the
+        // visible choices so a large pack cannot queue hundreds of thumbnails.
+        root.addEventListener("scroll", schedule, true);
+        root.addEventListener("wheel", schedule, true);
+        root.addEventListener("mousemove", schedule, true);
+        window.addEventListener("resize", schedule);
+        schedule();
+        return () => {
+            if (frame !== null) window.cancelAnimationFrame(frame);
+            root.removeEventListener("scroll", schedule, true);
+            root.removeEventListener("wheel", schedule, true);
+            root.removeEventListener("mousemove", schedule, true);
+            window.removeEventListener("resize", schedule);
+        };
+    }, [expanded, previews, found]);
     useLayoutEffect(() => {
         if (!expanded || !floating || !anchor.current || !menu.current) return;
         const place = () => {
@@ -237,19 +304,21 @@ function Picker({ id, value, items, onChange, placeholder = "Choose…", searcha
             }
         }),
         h(ScrollRegion, { className: "snf-picker-items", role: "listbox", "aria-labelledby": id,
-            style: { height: Math.min(165, Math.max(38, found.length * 36)) + "rem" } },
+            style: { height: Math.min(previews ? 220 : 165, Math.max(38, found.length * (previews ? 50 : 36))) + "rem" } },
             found.length === 0 && h("div", { className: "snf-picker-empty" }, "No matching choices"),
             found.map(item => h("button", {
                 key: String(item.value), type: "button", role: "option", "aria-selected": item.value === value,
-                className: "snf-picker-item" + (item.value === value ? " snf-picker-item-selected" : ""),
+                className: "snf-picker-item" + (item.preview !== undefined ? " snf-picker-item-preview" : "") + (item.value === value ? " snf-picker-item-selected" : ""),
                 onClick: () => { onChange(item.value); setExpanded(false); }
-            }, item.label))));
+            }, item.preview !== undefined && h(SurfacePreview, { src: item.preview, deferred: true }),
+                h("span", { className: "snf-picker-label" }, item.label)))));
     return h("div", { ref: anchor, className: "snf-picker" },
         h("button", {
             id, type: "button", className: "snf-picker-toggle", disabled,
             "aria-expanded": expanded, "aria-haspopup": "listbox",
             onClick: () => { setExpanded(!expanded); setQuery(""); }
-        }, h("span", { className: selected ? "" : "snf-muted" }, selected?.label || value || placeholder),
+        }, selected?.preview !== undefined && h(SurfacePreview, { src: selected.preview }),
+            h("span", { className: "snf-picker-label" + (selected ? "" : " snf-muted") }, selected?.label || value || placeholder),
             h("span", { className: "snf-chevron" + (expanded ? " snf-chevron-up" : ""), "aria-hidden": true })),
         floating ? choices && createPortal(choices, document.body) : choices
     );
@@ -268,57 +337,49 @@ function Toggle({ label, checked, onChange, disabled = false }) {
         h("span", { className: "snf-toggle-label" }, label));
 }
 
-function JunctionEditor({ junction = {}, saving }) {
-    const busy = saving || junction.pending;
-    return h("div", { className: "snf-junction-editor" },
-        h("div", { className: "snf-junction-controls" },
-            h("span", { className: "snf-eyebrow" }, "JUNCTION SURFACE"),
-            h("div", { className: "snf-junction-end" },
-                h(Picker, { id: "snf-junction-end", value: junction.end || 0, items: junctionEnds,
-                    disabled: busy, onChange: value => send("junctionEnd", value) })),
-            h("button", { type: "button", className: "snf-action snf-action-small",
-                disabled: busy || !junction.available || !junction.canUseSelected,
-                onClick: () => send("junctionUseSelected") }, "Use selected road"),
-            h("button", { type: "button", className: "snf-action snf-action-small",
-                disabled: busy || !junction.available || !junction.hasOverride,
-                onClick: () => send("junctionAutomatic") }, "Restore automatic")),
-        h("div", { className: "snf-junction-source", role: "status" },
-            junction.available ? h(React.Fragment, null,
-                h("div", null, h("strong", null, junction.kind + " pavement: "), junction.source),
-                h("div", { className: "snf-junction-surface" }, junction.surface ||
-                    (junction.canCycle ? "Cycle to choose a connected road's surface." : "No connected road has an active pavement rule."))) :
-                "Select a connected road with the Info tool near the junction or roundabout, then click Cycle junction surface."));
-}
-
-function RuleEditor({ draft, setDraft, surfaces, roads = [], onSave, onCancel, saving, local = false, applyDisabled = false }) {
+function RuleEditor({ draft, setDraft, surfaces, surfacePreviews = {}, installedSurfaces = surfaces, roads = [], onSave, onCancel, saving, local = false, applyDisabled = false }) {
     const change = (key, value) => setDraft(current => ({ ...current, [key]: value }));
-    const surfaceItems = useMemo(() => surfaces.map(name => ({ value: name, label: name })), [surfaces]);
+    const surfaceItems = useMemo(() => surfaces.map(name => ({ value: name, label: name, preview: surfacePreviews[name] || "" })), [surfaces, surfacePreviews]);
     const roadItems = useMemo(() => [{ value: "", label: "All road types in this category" },
         ...roads.map(name => ({ value: name, label: name }))], [roads]);
     const assignments = draft.assignments || [];
-    const hasOptions = local ? assignments.length > 0 || draft.separateBikeLanes !== null || draft.separateBusLanes !== null || draft.fillBusShoulders :
-        assignments.length > 0 || draft.separateBikeLanes || draft.separateBusLanes;
+    const roadAssignment = assignments.find(item => item.target === 0);
+    const hasOptions = local ? assignments.some(item => !item.inheritSurface) || draft.separateBikeLanes != null || draft.separateBusLanes != null || draft.fillBusShoulders :
+        assignments.length > 0;
     const canSave = !saving && !applyDisabled && hasOptions &&
         (local || !draft.fillBusShoulders || !!assignments.find(item => item.target === 4)?.surface) &&
-        assignments.every(item => (local || item.target >= 3 || !!item.surface) &&
-        (!draft.enabled || (!local && !laneTargetActive(draft, item.target)) || !item.surface || surfaces.includes(item.surface)));
+        assignments.every(item => !draft.enabled || !item.surface || installedSurfaces.includes(item.surface));
     const selectTarget = (target, selected) => setDraft(current => ({ ...current,
         assignments: selected ? [...current.assignments, { target, surface: "" }].sort((a, b) => a.target - b.target) :
             current.assignments.filter(item => item.target !== target),
-        separateBikeLanes: target === 3 && selected ? true : current.separateBikeLanes,
-        separateBusLanes: target === 4 && selected ? true : current.separateBusLanes,
-        fillBusShoulders: target === 4 && !selected && !local ? false : current.fillBusShoulders }));
-    const setSurface = (target, surface) => setDraft(current => ({ ...current,
-        assignments: current.assignments.map(item => item.target === target ? { ...item, surface } : item) }));
+        separateBikeLanes: target === 3 ? (selected ? true : local ? null : false) : current.separateBikeLanes,
+        separateBusLanes: target === 4 ? (selected ? true : local ? null : false) : current.separateBusLanes,
+        fillBusShoulders: target === 4 && !selected ? false : current.fillBusShoulders }));
+    const setSurface = (target, value) => setDraft(current => {
+        const lane = target === 3 || target === 4;
+        // Compatibility entries describe an older saved combination. Keeping
+        // that entry leaves both its material and inherited mode untouched.
+        if (local && lane && typeof value === "number" && value !== roadPavementChoice) return current;
+        const road = target !== 0 && value === roadPavementChoice;
+        const surface = road ? "" : value;
+        return { ...current,
+            assignments: current.assignments.map(item => item.target === target ?
+                { target, surface, ...(road ? { useRoadPavement: true } : {}) } : item),
+            separateBikeLanes: lane && target === 3 ? (!local || !road) : current.separateBikeLanes,
+            separateBusLanes: lane && target === 4 ? (!local || !road) : current.separateBusLanes,
+            fillBusShoulders: target === 4 && (road || !surface) ? false : current.fillBusShoulders };
+    });
+    const busAssignment = assignments.find(item => item.target === 4);
+    const canFillShoulders = !!busAssignment && !busAssignment.useRoadPavement && (!local || laneMode(draft, 4) !== false) &&
+        (!!busAssignment.surface || (local && !!busAssignment.inheritSurface));
     const shoulderControl = h("div", { className: "snf-shoulder-control" },
-        h(Toggle, { label: "Fill paved shoulders with bus-lane surface", checked: !!draft.fillBusShoulders, disabled: saving,
+        h(Toggle, { label: "Fill paved shoulders with bus-lane surface", checked: !!draft.fillBusShoulders,
+            disabled: saving || (!draft.fillBusShoulders && !canFillShoulders),
             onChange: value => setDraft(current => ({ ...current, fillBusShoulders: value,
-                separateBusLanes: value ? true : current.separateBusLanes,
-                assignments: value && !local && !current.assignments.some(item => item.target === 4) ?
-                    [...current.assignments, { target: 4, surface: "" }].sort((a, b) => a.target - b.target) : current.assignments })) }),
-        h("div", { className: "snf-field-hint" }, local ?
-            "Extends the segment’s bus-lane surface to adjacent paved shoulders. Junction shoulders connect when both roads enable this option. Grass, sidewalks and other traffic lanes stay protected." :
-            "Choose a bus-lane surface below to fill adjacent paved shoulders on matching roads. Junction shoulders connect when both roads enable this option. Grass, sidewalks, bike lanes and other traffic lanes stay protected."));
+                separateBusLanes: value ? true : current.separateBusLanes })) }),
+        h("div", { className: "snf-field-hint" }, canFillShoulders ?
+            "Extends this bus-lane finish onto adjacent paved shoulders. Junction shoulders connect when both roads enable it. Grass, sidewalks, bike lanes and other traffic lanes stay protected." :
+            "Choose a custom bus-lane finish above to enable shoulder filling."));
     return h("div", { className: "snf-editor" },
         h("div", { className: "snf-editor-heading" },
             h("span", { className: "snf-eyebrow" }, local ? draft.id ? "EDIT SEGMENT RULE" : "NEW SEGMENT RULE" : draft.id ? "EDIT RULE" : "NEW RULE"),
@@ -344,43 +405,45 @@ function RuleEditor({ draft, setDraft, surfaces, roads = [], onSave, onCancel, s
                 h("div", { className: "snf-target-checks" }, targets.map(target => h(Checkbox, { key: target.value,
                     label: target.label, checked: assignments.some(item => item.target === target.value), disabled: saving,
                     onChange: selected => selectTarget(target.value, selected) })))),
-            local ? h("div", { className: "snf-rule-lane-options" },
-                h(Field, { label: "Bike lane handling", id: "snf-local-bike-mode" },
-                    h(Picker, { id: "snf-local-bike-mode", value: draft.separateBikeLanes, items: segmentLaneModes, disabled: saving,
-                        onChange: value => change("separateBikeLanes", value) })),
-                h(Field, { label: "Bus lane handling", id: "snf-local-bus-mode" },
-                    h(Picker, { id: "snf-local-bus-mode", value: draft.separateBusLanes, items: segmentLaneModes, disabled: saving,
-                        onChange: value => setDraft(current => ({ ...current, separateBusLanes: value,
-                            fillBusShoulders: value === false ? false : current.fillBusShoulders })) })),
-                shoulderControl) :
-            h("div", { className: "snf-rule-lane-options" },
-                h(Toggle, { label: "Separate bike lane surfaces", checked: !!draft.separateBikeLanes, disabled: saving,
-                    onChange: value => change("separateBikeLanes", value) }),
-                h(Toggle, { label: "Separate bus lane surfaces", checked: !!draft.separateBusLanes, disabled: saving,
-                    onChange: value => setDraft(current => ({ ...current, separateBusLanes: value,
-                        fillBusShoulders: value ? current.fillBusShoulders : false })) }),
-                h("div", { className: "snf-field-hint" }, "For this rule’s roads: off uses road pavement. On keeps the original lane finish until you choose a lane surface."),
-                shoulderControl),
+            h("div", { className: "snf-field-hint" }, surfaces.length ?
+                "Only installed surfaces that support rendering over roads are listed." :
+                "No road-compatible surfaces found. Enable a surface pack that supports roads, then refresh surfaces."),
+            h("div", { className: "snf-field-hint" }, local ?
+                "Sidewalks, bike lanes and bus lanes can use Original finish, Use road pavement or a custom finish. Unchecked targets inherit the road's existing settings." :
+                "Sidewalks, bike lanes and bus lanes can use Original finish, Use road pavement or a custom finish. Unchecked lanes follow road pavement unless another matching rule handles them."),
             assignments.map(item => {
-                const lane = item.target >= 3;
-                const active = laneTargetActive(draft, item.target);
+                const lane = local && (item.target === 3 || item.target === 4);
+                const value = item.useRoadPavement ? roadPavementChoice : lane ? segmentLaneValue(draft, item) : item.surface;
+                const compatibility = lane && typeof value === "number" && value !== roadPavementChoice;
+                const items = [{ value: "", label: "Original finish" },
+                    ...(item.target !== 0 ? [{ value: roadPavementChoice, label: "Use road pavement",
+                        ...(roadAssignment?.surface ? { preview: surfacePreviews[roadAssignment.surface] || "" } : {}) }] : []),
+                    ...(compatibility ? [{ value, label: savedLaneChoiceLabel(value, item.surface) }] : []), ...surfaceItems];
                 const requiresBusSurface = !local && draft.fillBusShoulders && item.target === 4;
                 const id = "snf-rule-surface-" + item.target;
                 return h("section", { key: item.target, className: "snf-target-surface" },
                     h(Field, { label: labelOf(targets, item.target) + " surface", id,
                         hint: requiresBusSurface && !item.surface ? "Choose a surface to fill bus lanes and their paved shoulders." :
-                            !active ? "Separation is off. These lanes use road pavement." : (lane || local) && !item.surface ? "Original finish will remain visible." : null },
-                        h(Picker, { id, value: item.surface, items: (lane || local) && !requiresBusSurface ? [{ value: "", label: "Original finish" }, ...surfaceItems] : surfaceItems,
-                            searchable: true, placeholder: "Choose an installed surface", disabled: saving || !active || (!lane && !local && !surfaces.length),
+                            value === roadPavementChoice ? (roadAssignment ?
+                                (local ? "Uses the Road pavement surface selected in this segment rule." :
+                                    "Follows the road pavement applied to each matching segment.") :
+                                "Road pavement is unchecked, so this target follows the segment's existing road pavement finish.") :
+                            compatibility ? "Keeps this preset's saved inherited behavior. Choose a finish to override it, or uncheck this lane to inherit existing lane settings." :
+                            !item.surface ? "Original finish will remain visible." : null },
+                        h(Picker, { id, value, items,
+                            searchable: true, placeholder: "Choose a road-compatible surface", disabled: saving,
                             onChange: value => setSurface(item.target, value) }),
-                        active && item.surface && !surfaces.includes(item.surface) &&
-                            h("div", { className: "snf-warning" }, "Surface unavailable. Choose another surface or disable this rule.")));
+                        item.surface && !surfaces.includes(item.surface) &&
+                            h("div", { className: "snf-warning" }, installedSurfaces.includes(item.surface) ?
+                                "This saved surface cannot render over roads. Your selection is kept; choose a compatible replacement to see it on roads." :
+                                "Surface unavailable. Choose another surface or disable this rule.")),
+                    item.target === 4 && shoulderControl);
             }),
             !local && h(Toggle, { label: "Enable this rule", checked: draft.enabled, disabled: saving,
                 onChange: value => change("enabled", value) }),
             h("div", { className: "snf-note" }, local ? "General rules are optional. Unchecked targets inherit existing city finishes or keep vanilla finishes. Choose this preset in the road tool when drawing or using Replace. " +
                 (draft.updateExistingSegments ? "Saving also updates roads linked to this preset." : "Saving keeps placed roads as they are.") :
-                "Exact road types take priority over categories, then all roads. Lane settings use the most specific matching rules; when those rules overlap, any enabled separation switch keeps that lane separate."))),
+                "Exact road types take priority over categories, then all roads. Original finish overrides custom finishes from matching rules at the same priority. Use road pavement follows each segment's chosen pavement."))),
         h("div", { className: "snf-editor-actions" },
             h("button", { type: "button", className: "snf-action", disabled: saving, onClick: onCancel }, "Cancel"),
             h("button", { type: "button", className: "snf-action snf-action-primary", disabled: !canSave, onClick: onSave },
@@ -388,6 +451,13 @@ function RuleEditor({ draft, setDraft, surfaces, roads = [], onSave, onCancel, s
 }
 
 function UpgradeSelection({ upgrade }) {
+    if (upgrade.mode === 4) return h("div", { className: "snf-upgrade-selection" },
+        h("span", { className: "snf-eyebrow" }, "CHOOSE A ROAD TO EDIT"),
+        h("h3", null, "Make generated surfaces editable"),
+        h("p", null, "Click a road segment in the city. All its generated surfaces become editable with their existing finishes, and the surface editor opens automatically."),
+        h("p", null, "Wait for road generation to finish before selecting it. Right-click to cancel."),
+        upgrade.message && h("div", { className: "snf-message", role: "status" }, upgrade.message),
+        h("button", { type: "button", className: "snf-action", onClick: () => send("cancelUpgrade") }, "Cancel"));
     return h("div", { className: "snf-upgrade-selection" },
         h("span", { className: "snf-eyebrow" }, "ROAD TOOL"),
         h("h3", null, upgrade.label),
@@ -405,23 +475,15 @@ function UpgradeSelection({ upgrade }) {
 
 function UpgradeTools({ state }) {
     const [busSurface, setBusSurface] = useState("");
-    const [editorSurface, setEditorSurface] = useState("");
     const [confirmRestoreAll, setConfirmRestoreAll] = useState(false);
     const start = mode => send("startUpgrade", JSON.stringify({ mode, busSurface: mode === 1 ? busSurface : "" }));
     return h(ScrollRegion, { className: "snf-tools-scroll" }, h("div", { className: "snf-tools-content" },
         state.upgrade?.message && h("div", { className: "snf-message", role: "status" }, state.upgrade.message),
         h("section", { className: "snf-tool-card" },
             h("h3", null, "Edit generated surfaces"),
-            h("p", null, "Convert generated surfaces on selected roads into independent, editable areas. Your manual edits are kept through rebuilds, rule changes and road changes."),
+            h("p", null, "Click a road segment to make its generated surfaces editable. Each surface keeps its existing finish, and the editor opens automatically. Your manual edits are kept through rebuilds, rule changes and road changes."),
             h("button", { type: "button", className: "snf-action snf-action-primary", onClick: () => start(4) }, "Make generated surfaces editable"),
-            h("div", { className: "snf-field-hint" }, "Wait for generation to finish, select roads, then Apply changes. To edit a whole junction or roundabout, select all its approaches. Converted areas remain even if the road is removed and are excluded from Restore all roads."),
-            h(Field, { label: "Editor surface", id: "snf-editor-surface" },
-                h(Picker, { id: "snf-editor-surface", value: editorSurface, searchable: true, onChange: setEditorSurface,
-                    items: [{ value: "", label: "Choose a finish for editing" },
-                        ...(state.surfaces || []).map(name => ({ value: name, label: name }))] })),
-            h("button", { type: "button", className: "snf-action", disabled: !editorSurface,
-                onClick: () => send("openSurfaceEditor", editorSurface) }, "Open surface editor"),
-            h("div", { className: "snf-field-hint" }, "Use the game's area tool to drag boundary points or add points along edges. Editing applies the chosen finish. This tool can also draw new areas. Converted areas can also be used with compatible surface-editing tools."),
+            h("div", { className: "snf-field-hint" }, "Drag surface boundary points or add points along edges. Use Edit another segment to unlock each approach of a whole junction or roundabout. Converted areas remain when roads are removed and are excluded from Restore all roads."),
             h("div", { className: "snf-shoulder-remove" },
                 h("button", { type: "button", className: "snf-action", onClick: () => start(5) }, "Resume automatic surfaces"),
                 h("div", { className: "snf-field-hint" }, "Select converted roads, then Apply changes. Their saved rules become active again. Independent areas are kept; remove them yourself if they overlap the automatic surfaces."))),
@@ -431,7 +493,7 @@ function UpgradeTools({ state }) {
             h(Field, { label: "Bus-lane surface", id: "snf-shoulder-surface" },
                 h(Picker, { id: "snf-shoulder-surface", value: busSurface, searchable: true, onChange: setBusSurface,
                     items: [{ value: "", label: "Use each road's current bus-lane surface" },
-                        ...(state.surfaces || []).map(name => ({ value: name, label: name }))] })),
+                        ...(state.surfaces || []).map(name => ({ value: name, label: name, preview: state.surfacePreviews?.[name] || "" }))] })),
             h("button", { type: "button", className: "snf-action snf-action-primary", onClick: () => start(1) }, "Select road segments"),
             h("div", { className: "snf-field-hint" }, "Shoulders connect through junctions and around turns when both connected roads have shoulder filling enabled. Choose a surface here if the road has no custom bus finish. Grass, trees, sidewalks and bike lanes stay protected."),
             h("div", { className: "snf-shoulder-remove" },
@@ -453,10 +515,46 @@ function UpgradeTools({ state }) {
                             onClick: () => { setConfirmRestoreAll(false); send("restoreAllRoads"); } }, "Restore all roads"))))),
         h("section", { className: "snf-tool-card snf-junction-tool" },
             h("h3", null, "Junction surface"),
-            h("button", { type: "button", className: "snf-action", disabled: !state.junction?.canCycle || state.junction?.pending,
-                onClick: () => send("junctionNextRoad") }, "Cycle junction surface"),
-            h("div", { className: "snf-field-hint" }, "At bus-lane junctions, cycle between pavement with continuing bus lanes, pavement with bus lanes stopped at crosswalks, and a bus-surface junction fill. Bike surfaces stay visible."),
-            h(JunctionEditor, { junction: state.junction || {}, saving: false }))));
+            h("div", { className: "snf-tool-buttons" },
+                h("button", { type: "button", className: "snf-action",
+                    onClick: () => send("junctionNextRoad") }, "Cycle junction surface"),
+                h("button", { type: "button", className: "snf-action",
+                    onClick: () => send("junctionAutomatic") }, "Restore automatic")),
+            h("div", { className: "snf-field-hint" }, "Choose a tool, then left-click junctions or roundabouts in the city. Cycle changes their finish; Restore automatic clears their saved finish and follows connected road rules again. Right-click to exit."),
+            h("div", { className: "snf-field-hint" }, "At bus-lane junctions, cycle between pavement with continuing bus lanes, pavement with bus lanes stopped at crosswalks, and a bus-surface junction fill. Bike surfaces stay visible."))));
+}
+
+function ManualSurfaceEditSelection({ editor = {} }) {
+    return h("div", { className: "snf-upgrade-selection" },
+        h("span", { className: "snf-eyebrow" }, "SURFACE EDITOR ACTIVE"),
+        h("h3", null, "Edit generated surfaces"),
+        h("p", null, "Drag a converted surface's boundary points, or add points along an edge. Every surface keeps its existing finish."),
+        h("p", null, "These surfaces are independent of automatic road updates. Right-click to cancel a drag; right-click again when idle to finish editing."),
+        editor.message && h("div", { className: "snf-message", role: "status" }, editor.message),
+        h("div", { className: "snf-tool-buttons" },
+            h("button", { type: "button", className: "snf-action", onClick: () => send("startUpgrade", JSON.stringify({ mode: 4, busSurface: "" })) }, "Edit another segment"),
+            h("button", { type: "button", className: "snf-action", onClick: () => send("stopManualSurfaceEditor") }, "Finish editing")));
+}
+
+function JunctionCycleSelection({ junction = {}, tool = {} }) {
+    const automatic = !!tool.restoreAutomatic;
+    return h("div", { className: "snf-upgrade-selection" },
+        h("span", { className: "snf-eyebrow" }, "JUNCTION TOOL ACTIVE"),
+        h("h3", null, automatic ? "Restore automatic" : "Cycle junction surface"),
+        h("p", null, automatic ? "Point at a junction or roundabout, then left-click to clear its saved finish and follow connected road rules again." :
+            "Point at a junction or roundabout in the city, then left-click to cycle its finish. The target is highlighted."),
+        h("p", null, automatic ? "Click other junctions to restore their automatic finish. Right-click to exit the tool." :
+            "Click again for the next finish, or click another junction. Right-click to exit the tool."),
+        junction.available && h("div", { className: "snf-message" },
+            h("strong", null, junction.kind + ": "),
+            automatic ? (junction.hasOverride ? "Saved finish. Click to restore automatic selection." : "Using automatic selection.") :
+            junction.surface || (junction.canCycle ? "Click to choose a connected road's finish." :
+                "No connected road has an active pavement or bus-lane finish. Apply a surface rule to an approach first.")),
+        tool.message && h("div", { className: "snf-message", role: "status" }, tool.message),
+        h("div", { className: "snf-tool-buttons" },
+            h("button", { type: "button", className: "snf-action", onClick: () => send(automatic ? "junctionNextRoad" : "junctionAutomatic") },
+                automatic ? "Switch to cycling" : "Switch to automatic restore"),
+            h("button", { type: "button", className: "snf-action", onClick: () => send("stopJunctionCycle") }, "Exit junction tool")));
 }
 
 function RuleCards({ rules, local, onEdit, saving, onCopyToSegments }) {
@@ -478,8 +576,9 @@ function RuleCards({ rules, local, onEdit, saving, onCopyToSegments }) {
         h("div", { className: "snf-card-grid" }, rules.map(rule => {
         const open = expanded.has(rule.id);
         const detailsId = "snf-rule-details-" + rule.id;
+        const displayedAssignments = local ? segmentEditorAssignments(rule) : rule.assignments || [];
         const summary = [local ? "Selected segments" : rule.roadPrefab || labelOf(categories, rule.category),
-            (rule.assignments || []).length ? rule.assignments.map(item => labelOf(targets, item.target)).join(", ") : "Lane settings only",
+            displayedAssignments.length ? displayedAssignments.map(item => labelOf(targets, item.target)).join(", ") : "Lane settings only",
             rule.fillBusShoulders ? "Bus-lane shoulders" : "",
             local ? rule.updateExistingSegments ? "Updates placed roads" : "Keeps placed finishes" : ""].filter(Boolean).join(" · ");
         return h("section", { key: rule.id, className: "snf-rule" + (!rule.enabled ? " snf-rule-disabled" : "") + (open ? "" : " snf-rule-collapsed") },
@@ -494,14 +593,13 @@ function RuleCards({ rules, local, onEdit, saving, onCopyToSegments }) {
                     onClick: () => send("enableRule", rule.id, !rule.enabled) }, h("span"))),
             !open && h("div", { className: "snf-rule-summary" }, summary),
             open && h("div", { id: detailsId },
-            (rule.assignments || []).map(item => h("div", { key: item.target, className: "snf-rule-surface" },
+            displayedAssignments.map(item => h("div", { key: item.target, className: "snf-rule-surface" },
                 h("strong", null, labelOf(targets, item.target) + ": "),
-                local && ((item.target === 3 && rule.separateBikeLanes === null) || (item.target === 4 && rule.separateBusLanes === null)) ?
-                    item.surface || "Original finish" : laneTargetActive(rule, item.target) ? item.surface || "Original finish" : "Road pavement")),
+                item.useRoadPavement ? "Use road pavement" :
+                local && (item.target === 3 || item.target === 4) && typeof segmentLaneValue(rule, item) === "number" ?
+                    savedLaneChoiceLabel(segmentLaneValue(rule, item), item.surface) : laneTargetActive(rule, item.target) ? item.surface || "Original finish" : "Road pavement")),
             h("div", { className: "snf-rule-tags" },
                 !local && h("span", null, rule.roadPrefab || labelOf(categories, rule.category)),
-                rule.separateBikeLanes && h("span", null, "Separate bike lanes"),
-                rule.separateBusLanes && h("span", null, "Separate bus lanes"),
                 rule.fillBusShoulders && h("span", null, "Bus-lane shoulders"),
                 local && h("span", null, rule.updateExistingSegments ? "Updates placed roads" : "Keeps placed finishes"),
                 local && h("span", null, "Use in road tool"))),
@@ -533,6 +631,8 @@ function RuleManager({ state, onClose }) {
     const local = tab === "segments";
     const rules = local ? state.segmentPresets || [] : state.rules || [];
     const upgrade = state.upgrade || {};
+    const junctionTool = state.junctionTool || {};
+    const manualEditor = state.manualEditor || {};
     const active = (state.rules || []).filter(rule => rule.enabled && rule.available).length;
     const closeActions = useMemo(() => ({ "Pause Menu": onClose, Close: onClose, Back: onClose }), [onClose]);
     useEffect(() => {
@@ -541,7 +641,19 @@ function RuleManager({ state, onClose }) {
             if (state.savedRuleId) setDraft(null);
         }
     }, [state.saveResponse, state.savedRuleId]);
-    const edit = rule => setDraft({ ...rule, assignments: (rule.assignments || []).map(item => ({ ...item })) });
+    const edit = rule => {
+        if (local) { setDraft({ ...rule, assignments: segmentEditorAssignments(rule) }); return; }
+        // Older general rules could enable lane protection without a checked
+        // lane target, or retain a dormant choice with separation turned off.
+        // Represent the effective finish with the new single checkbox model.
+        const assignments = (rule.assignments || []).filter(item => item.useRoadPavement || laneTargetActive(rule, item.target))
+            .map(item => ({ ...item }));
+        if (!local) for (const target of [3, 4]) {
+            if (laneTargetActive(rule, target) && !assignments.some(item => item.target === target))
+                assignments.push({ target, surface: "" });
+        }
+        setDraft({ ...rule, assignments: assignments.sort((a, b) => a.target - b.target) });
+    };
     const changeTab = value => { setTab(value); setDraft(null); setQuery(""); };
     const createSegmentRule = () => {
         setTab("segments"); setQuery("");
@@ -554,7 +666,9 @@ function RuleManager({ state, onClose }) {
     };
     const save = () => {
         pending.current = state.saveResponse || 0; setSaving(true);
-        send(local ? "saveSegmentPreset" : "saveRule", JSON.stringify(local ? { rule: draft, fillBusShoulders: !!draft.fillBusShoulders,
+        const rule = local ? { ...draft, assignments: draft.assignments.filter(item => !item.inheritSurface)
+            .map(item => ({ target: item.target, surface: item.surface, useRoadPavement: !!item.useRoadPavement })) } : draft;
+        send(local ? "saveSegmentPreset" : "saveRule", JSON.stringify(local ? { rule, fillBusShoulders: !!draft.fillBusShoulders,
             updateExistingSegments: !!draft.updateExistingSegments } : draft));
     };
     const filtered = rules.filter(rule => [rule.name, rule.roadPrefab || "", ...(rule.assignments || []).map(item => item.surface)]
@@ -562,9 +676,12 @@ function RuleManager({ state, onClose }) {
     const header = h("div", { className: "snf-header" },
         h("img", { className: "snf-header-icon", src: "coui://ui-mods/SurfaceNetworkFilter.svg", alt: "" }),
         h("div", { className: "snf-title" }, "Road Surface Filler",
-            h("span", null, upgrade.active ? "Select road segments" : draft ? "Rule editor" : "Rules and tools")));
+            h("span", null, manualEditor.active ? "Edit surfaces · keep existing finishes" : junctionTool.active ? (junctionTool.restoreAutomatic ? "Restore automatic junctions" : "Click junctions to cycle") :
+                upgrade.active ? "Select road segments" : draft ? "Rule editor" : "Rules and tools")));
     return h(InputActionConsumer, { actions: closeActions, ignoreFocusState: true },
-        h(MovablePanel, { header, onClose, compact: !!upgrade.active },
+        h(MovablePanel, { header, onClose, compact: !!upgrade.active || !!junctionTool.active || !!manualEditor.active },
+            manualEditor.active ? h(ManualSurfaceEditSelection, { editor: manualEditor }) :
+            junctionTool.active ? h(JunctionCycleSelection, { junction: state.junction, tool: junctionTool }) :
             upgrade.active ? h(UpgradeSelection, { upgrade }) :
             h("div", { className: "snf-panel-content" },
                 h("div", { className: "snf-tabs", role: "tablist", "aria-label": "Road Surface Filler" },
@@ -581,7 +698,7 @@ function RuleManager({ state, onClose }) {
                         h("button", { type: "button", className: "snf-action snf-action-primary", onClick: add }, local ? "+ New segment rule" : "+ New rule"))),
                 h("div", { className: "snf-layout" },
                     tab === "tools" ? h(UpgradeTools, { state }) :
-                    draft ? h(RuleEditor, { draft, setDraft, surfaces: state.surfaces || [], roads: state.roadTypes || [],
+                    draft ? h(RuleEditor, { draft, setDraft, surfaces: state.surfaces || [], surfacePreviews: state.surfacePreviews || {}, installedSurfaces: state.installedSurfaces || [], roads: state.roadTypes || [],
                         local, saving, onSave: save, onCancel: () => setDraft(null) }) :
                     h("div", { className: "snf-list-column" },
                         h("div", { className: "snf-section-note" }, local ?
