@@ -23,6 +23,14 @@ namespace SurfaceNetworkFilter
         public string SegmentPresetsJson { get; set; } = "";
         internal List<SegmentUpgradePreset> GetSegmentPresets()
         {
+            if (m_CityStylingExpected) return ActiveStylingProfile?.SegmentRules ?? new List<SegmentUpgradePreset>();
+            return GetLegacySegmentPresets();
+        }
+        internal IEnumerable<SegmentUpgradePreset> GetCitySegmentPresets() => m_CityStylingExpected
+            ? (CityStylingLibrary?.Profiles ?? new List<StylingProfile>()).SelectMany(profile => profile.SegmentRules)
+            : GetLegacySegmentPresets();
+        internal List<SegmentUpgradePreset> GetLegacySegmentPresets()
+        {
             try
             {
                 return (JsonConvert.DeserializeObject<List<SegmentUpgradePreset>>(SegmentPresetsJson ?? "") ??
@@ -31,7 +39,14 @@ namespace SurfaceNetworkFilter
             catch (JsonException) { return new List<SegmentUpgradePreset>(); }
         }
         internal void StoreSegmentPresets(List<SegmentUpgradePreset> presets)
-        { SegmentPresetsJson = JsonConvert.SerializeObject(presets); ApplyAndSave(); }
+        {
+            if (m_CityStylingExpected)
+            {
+                if (ActiveStylingProfile == null) throw new ArgumentException("Wait for this city's styling profiles to load.");
+                ActiveStylingProfile.SegmentRules = presets; PersistCityStyling();
+            }
+            else { SegmentPresetsJson = JsonConvert.SerializeObject(presets); ApplyAndSave(); }
+        }
     }
 
     internal enum SegmentUpgradeMode { BusShoulders = 1, RestoreVanilla = 2, RemoveBusShoulders = 3, MakeEditable = 4, ResumeAutomatic = 5 }

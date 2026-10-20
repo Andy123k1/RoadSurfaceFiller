@@ -26,7 +26,13 @@
 .snf-toolbar-actions > button { margin: 4rem 0 4rem 8rem; }
 .snf-panel-content { display: flex; flex-direction: column; height: 620rem; max-height: calc(100vh - 110rem); min-height: 0; }
 .snf-layout { display: flex; flex: 1; height: auto; min-height: 0; overflow: hidden; background: #18242c; }
-.snf-tabs { display: flex; padding: 7rem 12rem 0; border-bottom: 1rem solid #40525d; background: #202d35; }
+.snf-tabs { display: flex; flex-wrap: wrap; padding: 7rem 12rem 0; border-bottom: 1rem solid #40525d; background: #202d35; }
+.snf-profile-selector { display: flex; flex: 0 0 auto; align-items: center; padding: 8rem 12rem; background: #182a34; border-bottom: 1rem solid #40525d; }
+.snf-profile-label { flex: 0 1 145rem; min-width: 0; padding-right: 10rem; font-size: 12rem; color: #e5f3fa; }
+.snf-profile-label span { display: block; margin-top: 3rem; font-size: 10rem; color: #9db4c0; overflow-wrap: break-word; }
+.snf-profile-selector > .snf-picker { flex: 1; min-width: 0; }
+.snf-profile-selector .snf-picker-toggle { min-height: 32rem; padding: 6rem 9rem; font-size: 12rem; }
+.snf-profile-confirm { margin-top: 10rem; padding-top: 5rem; border-top: 1rem solid #546e7b; }
 .snf-tab { padding: 8rem 14rem; margin-right: 7rem; border: 1rem solid #405663; border-bottom: 0; border-radius: 3rem 3rem 0 0; background: #14242d; color: #b8cedb; font-size: 13rem; }
 .snf-tab-selected { background: #2b4553; color: #edfaff; border-color: #66cef0; }
 .snf-segment-summary { padding: 7rem; color: #d2e3ec; }

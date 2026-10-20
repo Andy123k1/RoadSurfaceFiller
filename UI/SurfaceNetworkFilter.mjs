@@ -2,7 +2,7 @@
  * Cities: Skylines II UI Module
  * Id: SurfaceNetworkFilter
  * Author: Road Surface Filler
- * Version: 0.5.36
+ * Version: 0.5.39
  * Dependencies:
  */
 
@@ -19,6 +19,7 @@ const openBinding = bindValue(group, "open", false);
 const stateBinding = bindValue(group, "state", "{}");
 const roadToolBinding = bindValue(group, "roadToolActive", false);
 const send = (action, ...args) => trigger(group, action, ...args);
+const profileAction = (action, details = {}) => send("stylingProfileAction", JSON.stringify({ action, ...details }));
 export const hasCSS = true;
 
 const targets = [
@@ -557,7 +558,90 @@ function JunctionCycleSelection({ junction = {}, tool = {} }) {
             h("button", { type: "button", className: "snf-action", onClick: () => send("stopJunctionCycle") }, "Exit junction tool")));
 }
 
-function RuleCards({ rules, local, onEdit, saving, onCopyToSegments }) {
+function StylingProfileSelector({ profiles = {}, disabled }) {
+    return h("div", { className: "snf-profile-selector" },
+        h("div", { className: "snf-profile-label" }, "Styling profile", h("span", null, profiles.cityName || "This city")),
+        h(Picker, { id: "snf-city-profile", value: profiles.activeId || "", disabled: disabled || !profiles.ready,
+            searchable: true, placeholder: "Loading this city's profiles…",
+            items: (profiles.items || []).map(item => ({ value: item.id, label: item.name })),
+            onChange: targetId => profileAction("select", { targetId }) }));
+}
+
+function StylingProfilesManager({ profiles = {}, initialCopy }) {
+    const items = profiles.items || [];
+    const sources = profiles.sources || [];
+    const active = items.find(item => item.id === profiles.activeId);
+    const [name, setName] = useState(active?.name || "");
+    const [newName, setNewName] = useState("");
+    const [sourceId, setSourceId] = useState(initialCopy?.sourceId || "");
+    const [choice, setChoice] = useState(initialCopy ? initialCopy.kind + ":" + initialCopy.ruleId : "whole");
+    const [targetId, setTargetId] = useState(initialCopy ? items.find(item => item.id !== initialCopy.sourceId)?.id || "" : profiles.activeId || "");
+    const [copyName, setCopyName] = useState("");
+    const [confirmDelete, setConfirmDelete] = useState(false);
+    useEffect(() => {
+        if (!initialCopy) return;
+        setSourceId(initialCopy.sourceId); setChoice(initialCopy.kind + ":" + initialCopy.ruleId);
+        setTargetId(items.find(item => item.id !== initialCopy.sourceId)?.id || "");
+    }, [initialCopy]);
+    const source = sources.find(item => item.id === sourceId);
+    const destinations = items.filter(item => item.id !== sourceId);
+    const destination = destinations.some(item => item.id === targetId) ? targetId : destinations[0]?.id || "";
+    const choices = source ? [{ value: "whole", label: "Entire profile (new independent copy)" },
+        ...(source.generalRules || []).map(rule => ({ value: "general:" + rule.id, label: "General rule · " + rule.name })),
+        ...(source.segmentRules || []).map(rule => ({ value: "segment:" + rule.id, label: "Segment rule · " + rule.name }))] : [];
+    const copy = () => {
+        if (!source) return;
+        if (choice === "whole") profileAction("create", { sourceId, name: copyName });
+        else {
+            const separator = choice.indexOf(":");
+            profileAction("copyRule", { sourceId, targetId: destination, kind: choice.slice(0, separator), ruleId: choice.slice(separator + 1) });
+        }
+    };
+    return h(ScrollRegion, { className: "snf-tools-scroll" }, h("div", { className: "snf-tools-content" },
+        h("div", { className: "snf-section-note" }, "Default starts with your shared rules from before the update. Create an empty profile or duplicate Default for a new city. Each city saves its own profiles and selection. Use Apply city rules or the road tool to apply the chosen setup."),
+        profiles.message && h("div", { className: "snf-field-hint" }, profiles.message),
+        h("section", { className: "snf-tool-card" },
+            h("h3", null, "This city's profile"),
+            h(Field, { label: "Profile name", id: "snf-profile-name" }, h("input", { id: "snf-profile-name", className: "snf-input", value: name,
+                maxLength: 120, onChange: event => setName(event.target.value) })),
+            h("div", { className: "snf-tool-buttons" },
+                h("button", { type: "button", className: "snf-action", disabled: !name.trim() || name.trim() === active?.name,
+                    onClick: () => profileAction("rename", { name }) }, "Rename profile"),
+                h("button", { type: "button", className: "snf-action", disabled: items.length < 2,
+                    onClick: () => setConfirmDelete(!confirmDelete) }, "Delete profile")),
+            confirmDelete && h("div", { className: "snf-profile-confirm" },
+                h("p", null, "Remove this profile and its rule library? Applied road finishes and independent editable areas are kept."),
+                h("div", { className: "snf-tool-buttons" },
+                    h("button", { type: "button", className: "snf-action", onClick: () => setConfirmDelete(false) }, "Cancel"),
+                    h("button", { type: "button", className: "snf-action snf-action-danger", onClick: () => profileAction("delete") }, "Delete profile")))),
+        h("section", { className: "snf-tool-card" },
+            h("h3", null, "Create a profile"),
+            h(Field, { label: "New profile name", id: "snf-profile-new-name" }, h("input", { id: "snf-profile-new-name", className: "snf-input", value: newName,
+                placeholder: "For example: City centre or Suburbs", maxLength: 120, onChange: event => setNewName(event.target.value) })),
+            h("div", { className: "snf-tool-buttons" },
+                h("button", { type: "button", className: "snf-action snf-action-primary", onClick: () => profileAction("create", { name: newName }) }, "Create empty profile"),
+                h("button", { type: "button", className: "snf-action", onClick: () => profileAction("create", { name: newName, sourceId: profiles.activeId }) }, "Duplicate current profile"))),
+        h("section", { className: "snf-tool-card" },
+            h("h3", null, "Copy from profile"),
+            h("p", null, "Copy a whole setup or one rule from this city, another city's last loaded profiles, or the original Default setup. Copies have their own settings and can be edited independently."),
+            h(Field, { label: "Source profile", id: "snf-profile-source" }, h(Picker, { id: "snf-profile-source", value: sourceId, searchable: true,
+                placeholder: "Choose a profile to copy from", items: sources.map(item => ({ value: item.id,
+                    label: (item.cityName || "Saved library") + " · " + item.name })),
+                onChange: value => { setSourceId(value); setChoice("whole"); setCopyName(""); } })),
+            source && h(React.Fragment, null,
+                h(Field, { label: "What to copy", id: "snf-profile-copy-choice" }, h(Picker, { id: "snf-profile-copy-choice", value: choice,
+                    items: choices, searchable: true, onChange: setChoice })),
+                choice === "whole" ? h(Field, { label: "Name for the new profile (optional)", id: "snf-profile-copy-name" },
+                    h("input", { id: "snf-profile-copy-name", className: "snf-input", value: copyName, maxLength: 120,
+                        placeholder: source.name + " (copy)", onChange: event => setCopyName(event.target.value) })) :
+                    h(Field, { label: "Copy into this city's profile", id: "snf-profile-destination" }, h(Picker, { id: "snf-profile-destination", value: destination,
+                        placeholder: "Create another profile first", items: destinations.map(item => ({ value: item.id, label: item.name })), onChange: setTargetId })),
+                h("button", { type: "button", className: "snf-action snf-action-primary", disabled: choice !== "whole" && !destination,
+                    onClick: copy }, choice === "whole" ? "Copy as new profile" : "Copy rule"),
+                h("div", { className: "snf-field-hint" }, "Copied rules are added to the destination. Existing rules are kept. Missing surface packs remain identified so you can install them or choose replacements.")))));
+}
+
+function RuleCards({ rules, local, onEdit, saving, onCopyToSegments, onCopyToProfile }) {
     const [deleteId, setDeleteId] = useState("");
     const [expanded, setExpanded] = useState(() => new Set(expandedRuleIds));
     const updateExpansion = next => { expandedRuleIds = next; setExpanded(next); };
@@ -610,6 +694,7 @@ function RuleCards({ rules, local, onEdit, saving, onCopyToSegments }) {
                     onClick: () => onEdit({ ...rule, id: "", name: rule.name + " (copy)" }) }, "Duplicate"),
                 !local && h("button", { type: "button", disabled: saving,
                     onClick: () => { send("copyRuleToSegments", rule.id); onCopyToSegments(); } }, "Copy to Segment rules"),
+                h("button", { type: "button", disabled: saving, onClick: () => onCopyToProfile(rule) }, "Copy to profile"),
                 h("button", { type: "button", className: "snf-delete", disabled: saving,
                     onClick: () => setDeleteId(deleteId === rule.id ? "" : rule.id) }, "Delete")),
             deleteId === rule.id && h("div", { className: "snf-delete-confirm" },
@@ -624,7 +709,13 @@ function RuleManager({ state, onClose }) {
     const [tab, setTab] = useState("rules");
     const [query, setQuery] = useState("");
     const [saving, setSaving] = useState(false);
+    const [profileCopy, setProfileCopy] = useState(null);
+    const profiles = state.stylingProfiles || {};
     const pending = useRef(null);
+    useEffect(() => {
+        setDraft(null); setQuery(""); setSaving(false); pending.current = null; setProfileCopy(null);
+        expandedRuleIds = new Set();
+    }, [profiles.cityId, profiles.activeId]);
     useEffect(() => {
         if (state.editorRequest) { setTab("segments"); setDraft(null); setQuery(""); }
     }, [state.editorRequest]);
@@ -654,7 +745,7 @@ function RuleManager({ state, onClose }) {
         }
         setDraft({ ...rule, assignments: assignments.sort((a, b) => a.target - b.target) });
     };
-    const changeTab = value => { setTab(value); setDraft(null); setQuery(""); };
+    const changeTab = value => { setTab(value); setDraft(null); setQuery(""); setProfileCopy(null); };
     const createSegmentRule = () => {
         setTab("segments"); setQuery("");
         setDraft({ ...emptyDraft(), separateBikeLanes: null, separateBusLanes: null, fillBusShoulders: false, updateExistingSegments: false });
@@ -684,11 +775,12 @@ function RuleManager({ state, onClose }) {
             junctionTool.active ? h(JunctionCycleSelection, { junction: state.junction, tool: junctionTool }) :
             upgrade.active ? h(UpgradeSelection, { upgrade }) :
             h("div", { className: "snf-panel-content" },
+                h(StylingProfileSelector, { profiles, disabled: saving || !!draft || state.restoringAllRoads }),
                 h("div", { className: "snf-tabs", role: "tablist", "aria-label": "Road Surface Filler" },
-                    [["rules", "General rules"], ["segments", "Segment rules"], ["tools", "Tools"]].map(([value, label]) =>
+                    [["rules", "General rules"], ["segments", "Segment rules"], ["tools", "Tools"], ["profiles", "Profiles"]].map(([value, label]) =>
                         h("button", { key: value, type: "button", role: "tab", "aria-selected": tab === value, disabled: saving,
                             className: "snf-tab" + (tab === value ? " snf-tab-selected" : ""), onClick: () => changeTab(value) }, label))),
-                tab !== "tools" && !draft && h("div", { className: "snf-toolbar" },
+                profiles.ready && tab !== "tools" && tab !== "profiles" && !draft && h("div", { className: "snf-toolbar" },
                     h("div", { className: "snf-count" }, rules.length + (local ? " segment rules" : " general rules"),
                         h("span", null, local ? "Use while drawing roads or with Replace" : active + " enabled · apply changes when ready")),
                     h("div", { className: "snf-toolbar-actions" },
@@ -697,6 +789,8 @@ function RuleManager({ state, onClose }) {
                             onClick: () => send("applyCityRules") }, "Apply city rules"),
                         h("button", { type: "button", className: "snf-action snf-action-primary", onClick: add }, local ? "+ New segment rule" : "+ New rule"))),
                 h("div", { className: "snf-layout" },
+                    !profiles.ready ? h("div", { className: "snf-empty" }, profiles.message || "Loading this city's styling profiles…") :
+                    tab === "profiles" ? h(StylingProfilesManager, { key: profiles.cityId + ":" + profiles.activeId, profiles, initialCopy: profileCopy }) :
                     tab === "tools" ? h(UpgradeTools, { state }) :
                     draft ? h(RuleEditor, { draft, setDraft, surfaces: state.surfaces || [], surfacePreviews: state.surfacePreviews || {}, installedSurfaces: state.installedSurfaces || [], roads: state.roadTypes || [],
                         local, saving, onSave: save, onCancel: () => setDraft(null) }) :
@@ -713,7 +807,8 @@ function RuleManager({ state, onClose }) {
                                     "Create a rule with separate finishes for pavement, sidewalks and dedicated lanes."),
                                 h("button", { type: "button", className: "snf-action snf-action-primary", onClick: add }, local ? "Create segment rule" : "Create rule")) :
                             filtered.length === 0 ? h("div", { className: "snf-empty" }, "No rules match your search.") :
-                            h(RuleCards, { rules: filtered, local, saving, onEdit: edit, onCopyToSegments: () => changeTab("segments") })))),
+                            h(RuleCards, { rules: filtered, local, saving, onEdit: edit, onCopyToSegments: () => changeTab("segments"),
+                                onCopyToProfile: rule => { changeTab("profiles"); setProfileCopy({ sourceId: profiles.activeId, ruleId: rule.id, kind: local ? "segment" : "general" }); } })))),
                 h("div", { className: "snf-footer" },
                     (state.message || state.cityMessage) && h("div", { className: "snf-message", role: "status" }, state.message || state.cityMessage),
                     tab === "rules" && !draft && h("div", { className: "snf-city-apply-status" },

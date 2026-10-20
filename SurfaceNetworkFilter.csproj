@@ -7,7 +7,7 @@
     <RootNamespace>SurfaceNetworkFilter</RootNamespace>
     <AssemblyTitle>Road Surface Filler</AssemblyTitle>
     <Product>Road Surface Filler</Product>
-    <Version>0.5.36</Version>
+    <Version>0.5.39</Version>
     <PublishConfigurationPath>Properties\PublishConfiguration.xml</PublishConfigurationPath>
   </PropertyGroup>
 

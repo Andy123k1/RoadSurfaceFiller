@@ -114,7 +114,7 @@ namespace SurfaceNetworkFilter
             if (!m_PresetLinksInitialized || m_LastPresetRevision != RuntimeState.SegmentPresetRevision)
             {
                 m_PresetDefinitions.Clear();
-                foreach (SegmentUpgradePreset preset in setting.GetSegmentPresets())
+                foreach (SegmentUpgradePreset preset in setting.GetCitySegmentPresets())
                     if (!string.IsNullOrEmpty(preset.Rule.Id)) m_PresetDefinitions[preset.Rule.Id] = preset;
                 m_LegacyPresetCandidates.AddRange(RuntimeState.PreviousSegmentPresets);
                 m_LegacyPresetCandidates.AddRange(m_PresetDefinitions.Values);

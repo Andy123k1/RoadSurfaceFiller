@@ -23,6 +23,7 @@ namespace SurfaceNetworkFilter
             ActiveSetting.RegisterInOptionsUI();
             AssetDatabase.global.LoadSettings("SurfaceNetworkFilter", ActiveSetting, new Setting(this));
             ActiveSetting.InitializeRules();
+            ActiveSetting.InitializeDefaultStylingProfile();
             GameManager.instance.localizationManager.AddSource("en-US", new LocaleEN(ActiveSetting));
             // Definitions must exist before the game's modification pass consumes
             // Updated tags and generates the permanent areas.

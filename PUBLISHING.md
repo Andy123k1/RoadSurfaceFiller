@@ -19,7 +19,7 @@ Edit **Properties/PublishConfiguration.xml**. It includes:
 - Display name **Road Surface Filler** and a description of the current features.
 - The supplied RSF image at **Properties/Thumbnail.png**.
 - Five screenshots under **Properties/Screenshots**: the two UI screenshots followed by the three city screenshots in the supplied order.
-- Mod version **0.5.36** (published) and installed game version **1.6.2f1**.
+- Mod version **0.5.39** (local development; latest published release is **0.5.36**) and installed game version **1.6.2f1**.
 - **Public** visibility for the released listing.
 - **ModId 163448** for the existing Road Surface Filler listing.
 
@@ -52,7 +52,13 @@ From this folder:
 dotnet build RoadSurfaceFiller.sln -c Release --no-restore -p:SurfaceNetworkFilterStageOnly=true
 ```
 
-This uses the official post-processor and writes the runtime files to `artifacts/v0.5.36`. Normal builds deploy to the local game mod folder, so close the game before using normal deployment. Disable the PDX Mods copy in your active playset before using a local development copy to avoid loading two copies.
+This uses the official post-processor and writes the runtime files to `artifacts/v0.5.39`. Normal builds deploy to the local game mod folder, so close the game before using normal deployment. Disable the PDX Mods copy in your active playset before using a local development copy to avoid loading two copies.
+
+For 0.5.39, check that the pre-update shared General and Segment library becomes Default, including unused definitions and update preferences. New city libraries start from independent copies of that fixed setup. Existing city libraries must load without receiving extra profiles. Create empty profiles, copy and rename them, switch cities, delete Default and save/reload. Confirm segment presets retain surfaces, identities, Original finish, Use road pavement and shoulder settings, including links in inactive profiles. On converted areas, move vertices and save/reload after switching or deleting profiles; independent geometry and materials must remain, and automatic surfaces must stay suppressed until explicitly resumed. Focused data checks do not replace these in-game checks.
+
+For 0.5.38, check automatic import of the full legacy shared library into older cities, including unused rules, cities whose saved finishes differ and existing customized 0.5.37 profiles. Save/reload repeatedly, rename/delete the imported profile and confirm the import does not recur. A new city must start empty. Delete the active first/middle/last profile with multiple profiles present and confirm the selector and every tab keep working; the only remaining profile must be protected. Reload an older save with an invalid active ID and confirm selection recovery. Confirm applied finishes, preset links and independent areas remain. Gameplay checks have not been run automatically.
+
+For 0.5.37, use separate cities to check empty new-city profiles, migration of applied General rules and used segment presets, pending library edits, save/reload and loading an older save. Create and switch named profiles, copy whole profiles and individual rules within/across cities, then edit the copies and confirm the sources stay unchanged. Confirm switching profiles does not repaint roads, inactive-profile segment links retain their saved behavior, and deletion preserves applied finishes and manual areas. Include missing surface packs, Original finish, Use road pavement, shoulder settings and preset update preferences. Gameplay checks have not been run automatically; do not publish this development build without reviewing it.
 
 For 0.5.36, activate Make generated surfaces editable and click a completed road with several different surface finishes. Confirm automatic editor activation without material selection or Apply changes, then move/insert vertices, including a shared point between different materials. Every affected converted area must retain its own finish. Check another-segment targeting, pending-generation retry, right-click cancellation/exit, unrelated area protection and automatic generation on other roads. Reopen older converted areas, save/reload, rebuild, change/remove/split the converted road and confirm manual edits remain. Resume automatic surfaces must retain independent areas. Gameplay checks have not been run automatically.
 

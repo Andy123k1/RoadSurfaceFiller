@@ -29,7 +29,7 @@ namespace SurfaceNetworkFilter
             // UISystemBase.gameMode is a supported-mode mask, not the mode
             // currently running. Check the scene manager before editing.
             GameManager manager = GameManager.instance;
-            return manager != null && manager.gameMode == GameMode.Game && !manager.isGameLoading;
+            return manager != null && manager.gameMode == GameMode.Game && !manager.isGameLoading && Mod.ActiveSetting?.CityStylingReady == true;
         }
 
         protected override void OnCreate()
@@ -56,6 +56,7 @@ namespace SurfaceNetworkFilter
             AddBinding(new TriggerBinding(Group, "stopJunctionCycle", () => { JunctionCycleTool().Cancel(); Publish(); }));
             AddBinding(new TriggerBinding(Group, "junctionAutomatic", () => BeginJunctionTool(true)));
             AddSegmentRuleBindings();
+            AddStylingProfileBindings();
         }
 
         protected override void OnUpdate()
@@ -209,6 +210,7 @@ namespace SurfaceNetworkFilter
         {
             Setting setting = Mod.ActiveSetting;
             if (setting == null) return;
+            setting.RepairActiveStylingProfile();
             JunctionEditorState junction = RuntimeState.JunctionEditor;
             bool junctionReady = IsInLoadedCity() && RuntimeState.JunctionCycleActive;
             m_State.Update(JsonConvert.SerializeObject(new {
@@ -220,6 +222,7 @@ namespace SurfaceNetworkFilter
                 restoringAllRoads = RuntimeState.RestoreAllRoadsRequested || RuntimeState.RestoringAllRoads,
                 appliedCityRuleCount = setting.RuleCount,
                 cityMessage = RuntimeState.CityRulesMessage,
+                stylingProfiles = StylingProfilesState(),
                 rules = setting.GetRules().Select(rule => new {
                     id = rule.Id, name = rule.Name, enabled = rule.Enabled,
                     category = (int)rule.Category, roadPrefab = rule.RoadPrefab,

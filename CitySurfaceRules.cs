@@ -50,6 +50,7 @@ namespace SurfaceNetworkFilter
             RuntimeState.RestoreAllRoadsRequested = RuntimeState.RestoringAllRoads = false;
             RuntimeState.CityRulesMessage = ""; RuntimeState.CityRulesPending = false; RuntimeState.CityRuleMemberCount = 0;
             Mod.ActiveSetting?.SetAppliedRules(new List<SurfaceRule>());
+            ResetCityStyling();
         }
 
         private void UpdateCityRules(Setting setting)
@@ -71,7 +72,7 @@ namespace SurfaceNetworkFilter
                     // Preserve existing saves once when upgrading from the
                     // automatic workflow. Only their already existing roads
                     // inherit the last library; no future roads are enrolled.
-                    applied = CloneCityRules(setting);
+                    applied = Setting.CloneStyling(setting.GetLegacyRules());
                     MarkCurrentCityRoads(setting);
                     SaveCityRuleSnapshot(applied);
                     Mod.Log.Info("Preserved existing city surfaces as an explicit city rule snapshot.");
@@ -79,8 +80,10 @@ namespace SurfaceNetworkFilter
                 else SaveCityRuleSnapshot(applied);
                 applied.RemoveAll(rule => rule == null);
                 setting.SetAppliedRules(applied);
+                InitializeCityStyling(setting, applied);
                 m_CityRulesInitialized = true;
             }
+            setting.RepairActiveStylingProfile();
             if (RuntimeState.ApplyCityRulesRequested)
             {
                 RuntimeState.ApplyCityRulesRequested = false;

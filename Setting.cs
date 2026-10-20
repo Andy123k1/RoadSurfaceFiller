@@ -294,6 +294,7 @@ namespace SurfaceNetworkFilter
             SeparateBikeLaneSurfaces = SeparateBusLaneSurfaces = false;
             RulesJson = "";
               SegmentPresetsJson = "";
+            StylingProfileArchiveJson = "";
             Placement = PlacementMode.ExistingAndNewSegments;
             SurfaceSearch = "";
             Surface1 = Surface2 = Surface3 = Surface4 = "";

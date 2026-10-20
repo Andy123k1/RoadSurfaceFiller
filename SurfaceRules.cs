@@ -76,6 +76,12 @@ namespace SurfaceNetworkFilter
 
         internal List<SurfaceRule> GetRules()
         {
+            if (m_CityStylingExpected) return ActiveStylingProfile?.GeneralRules ?? new List<SurfaceRule>();
+            return GetLegacyRules();
+        }
+
+        internal List<SurfaceRule> GetLegacyRules()
+        {
             if (m_Rules != null) return m_Rules;
             m_RulesMigrated = m_RuleReadFailed = false;
             try
@@ -127,6 +133,13 @@ namespace SurfaceNetworkFilter
 
         internal void StoreRules(List<SurfaceRule> rules)
         {
+            if (m_CityStylingExpected)
+            {
+                if (ActiveStylingProfile == null) throw new ArgumentException("Wait for this city's styling profiles to load.");
+                ActiveStylingProfile.GeneralRules = rules;
+                PersistCityStyling();
+                return;
+            }
             m_Rules = rules;
             m_PlacementFingerprint = null;
             m_RulesJson = JsonConvert.SerializeObject(rules);
