@@ -1,6 +1,6 @@
 # Version 0.5.39
 
-Combines all changes from versions 0.5.36 through 0.5.39 into one update.
+Combines the city-profile updates from versions 0.5.37 through 0.5.39.
 
 ## Default and city styling profiles
 
@@ -12,11 +12,37 @@ Combines all changes from versions 0.5.36 through 0.5.39 into one update.
 - Keeps matching saved segment links, update preferences and differing saved road definitions. Presets in inactive profiles remain available to their linked roads, and missing surface names remain identified.
 - Switching profiles keeps applied road finishes. General rules still require **Apply city rules**; Segment rules still use the road tool and each preset's update preference.
 
+## How to use city styling profiles
+
+1. Open the **RSF** panel. Your shared General rules and Segment rules from before this update are available as **Default**. No manual import is needed.
+2. Open **Profiles**. For a new city or a different look, enter a profile name and choose **Create empty profile**. To start with your old setup, select Default first, then choose **Duplicate current profile**.
+3. Use the **Styling profile** dropdown above the tabs to choose the profile you want to work with. Each city remembers its selected profile and keeps its own changes.
+4. To reuse a setup, open **Copy from profile**, choose a source, then select **Entire profile** or an individual General/Segment rule. Whole profiles become new independent copies; individual rules are added to the destination profile you choose. Rule cards also offer **Copy to profile**. Load another city once to make its profiles available as copy sources.
+5. Save General-rule edits, then choose **Apply city rules** to update existing roads. For Segment rules, select a preset in the road tool's **Surface rule** picker when drawing roads or using Replace. Each preset keeps its own preference for updating roads already using it.
+6. **Save your city** to retain its profiles and selected setup. You can rename or delete your city's Default without it being recreated on the next load; the original Default setup remains available to copy from.
+
+## What stays when you switch profiles
+
+- **Placed segment finishes persist.** Switching profiles does not remove or reset the Segment rules already applied to roads. Linked presets in inactive profiles remain available to their roads and retain their update preferences.
+- **Editable areas persist.** Surfaces already converted with Make generated surfaces editable keep their saved shapes and finishes regardless of the active styling profile. Switching, renaming or deleting a profile does not erase those independent areas or resume automatic painting on converted roads.
+- **General-rule finishes stay until you apply changes.** Choosing a different profile alone does not repaint existing roads. Use Apply city rules or the road tool when you want to change their appearance.
+- **Deleting a profile removes its rule library, not its placed finishes or editable areas.** At least one profile must remain. Resume automatic surfaces is still an explicit tool action and keeps independent areas, so remove unwanted overlaps yourself.
+
 ## Profile deletion fix
 
 - Fixes deleting the active profile disabling every tab and leaving the dropdown with a missing profile ID.
 - Selects a remaining profile before removing the old entry and automatically recovers an invalid saved selection. At least one profile must remain.
 - Keeps applied road finishes, junction choices and independent editable areas when removing a profile.
+
+## After updating
+
+- Restart with the updated mod and reload your city. Save the city to retain its styling profiles and selected setup.
+- Your previous shared library is available as Default. Create an empty profile or duplicate Default for a different city's style.
+- Switching profiles alone keeps existing roads and editable areas. Use Apply city rules or the road tool when you want to apply a different setup.
+
+# Version 0.5.36
+
+Includes all updates since version 0.5.28, combining versions 0.5.29 through 0.5.36.
 
 ## UI overhaul and more intuitive tools
 
@@ -54,12 +80,10 @@ Combines all changes from versions 0.5.36 through 0.5.39 into one update.
 
 ## After updating
 
-- Restart with the updated build and reload the city. Save the city to retain its profiles, chosen setup and recovered junction identities.
 - Use **Rebuild applied surfaces** once to apply the junction and highway coverage improvements to existing automatic surfaces. Independent manual areas are kept.
+- Load and save your city to retain recovered junction identities. If a saved surface pack is actually missing, reinstall it or choose a replacement with the junction tool.
 - Save General-rule edits, then choose **Apply city rules** when ready. Segment presets retain their preference for updating roads already using that preset.
-- If a saved surface pack is actually missing, reinstall it or choose a replacement with the junction tool.
-- To edit an entire junction or roundabout, convert its approach segments using **Edit another segment**. Converted areas still need Road Surface Filler and their surface assets enabled. Automatic painting resumes only through **Resume automatic surfaces**.
-- Version 0.5.39 is a GitHub source update; it has not been published to PDX Mods. The local build and 20 focused profile/data checks passed. Native city save/load and vertex editing still need in-game confirmation.
+- To edit an entire junction or roundabout, convert its approach segments using **Edit another segment**. Converted areas still need Road Surface Filler and their surface assets enabled.
 
 # Version 0.5.35
 

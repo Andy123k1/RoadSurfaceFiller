@@ -19,7 +19,7 @@ Edit **Properties/PublishConfiguration.xml**. It includes:
 - Display name **Road Surface Filler** and a description of the current features.
 - The supplied RSF image at **Properties/Thumbnail.png**.
 - Five screenshots under **Properties/Screenshots**: the two UI screenshots followed by the three city screenshots in the supplied order.
-- Mod version **0.5.39** (local development; latest published release is **0.5.36**) and installed game version **1.6.2f1**.
+- Mod version **0.5.39** (current published release) and installed game version **1.6.2f1**.
 - **Public** visibility for the released listing.
 - **ModId 163448** for the existing Road Surface Filler listing.
 
@@ -39,6 +39,8 @@ Every referenced thumbnail and screenshot is below 2 MB to fit the publisher's 2
 5. Keep **ModId 163448** in the configuration so update profiles target the existing listing.
 
 Selecting **Publish** starts an upload. A normal **Build** does not upload anything.
+
+Version **0.5.39** was uploaded to **ModId 163448** with the official publisher's **NewVersion** command. The publisher confirmed **New mod version published** and **Publishing new version updating process finished successfully**, with exit code **0**. The user approved the description and revised changelog covering **0.5.37 through 0.5.39**; the already published 0.5.36 feature sections remain in their historical entry. The release explains Default, profile creation/copying, saved segment finishes and independent editable areas. Publication evidence is saved in `artifacts/v0.5.39-publication.json` and `.tmp/v0.5.39-publish.log`.
 
 Version **0.5.36** was uploaded to **ModId 163448** with the official publisher's **NewVersion** command. The publisher confirmed **New mod version published** and **Publishing new version updating process finished successfully**, with exit code **0**. The approved cumulative changelog includes **0.5.29 through 0.5.36**. Local publication evidence is saved in `artifacts/v0.5.36-publication.json` and `.tmp/v0.5.36-publish.log`.
 
